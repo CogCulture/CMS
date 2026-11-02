@@ -1,0 +1,18 @@
+{
+  "name": "emaar-cms-dashboard",
+  "version": "1.0.0",
+  "description": "CMS Dashboard & Node.js API Layer for Emaar India",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1"
+  },
+  "keywords": ["cms", "emaar-india", "dashboard", "nodejs", "mysql"],
+  "author": "Emaar Engineering Team",
+  "license": "ISC"
+}

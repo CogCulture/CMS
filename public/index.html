@@ -1,0 +1,2012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClientCMS - Content Management System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cinzel:wght@400;500;600;700&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+  <div class="cms-app">
+    <!-- ========================================== -->
+    <!-- SIDEBAR (Matches Reference Image) -->
+    <!-- ========================================== -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <svg class="logo-icon" width="26" height="26" viewBox="0 0 24 24" fill="none">
+            <rect width="24" height="24" rx="6" fill="#09090b"/>
+            <path d="M7 12L12 7L17 12L12 17L7 12Z" fill="white" fill-opacity="0.9"/>
+          </svg>
+          <span class="logo-text">ClientCMS</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-menu">
+        <a href="#dashboard" class="menu-item active" data-tab="dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="#content" class="menu-item" data-tab="content">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          <span>Content Editor</span>
+        </a>
+        <a href="#library" class="menu-item" data-tab="library">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg>
+          <span>Upload Library</span>
+        </a>
+        <a href="#pages" class="menu-item" data-tab="pages">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+          <span>Pages</span>
+        </a>
+        <a href="#settings" class="menu-item" data-tab="settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <span>Settings</span>
+        </a>
+      </nav>
+
+      <!-- Bottom User Profile Section (Moved from topbar) -->
+      <div class="sidebar-footer">
+        <div class="profile-dropdown-wrapper">
+          <div class="user-pill" id="userProfileTrigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false">
+            <div class="user-pill-left">
+              <div class="avatar">TY</div>
+              <div class="user-info-text">
+                <span class="user-name">Tushar Yadav</span>
+                <span class="user-role">Lead Administrator</span>
+              </div>
+            </div>
+            <svg class="chevron-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>
+          </div>
+
+          <!-- Profile Dropdown Menu (Opens upwards in sidebar) -->
+          <div class="profile-dropdown-menu" id="userProfileDropdown">
+            <div class="profile-dropdown-header">
+              <div class="avatar avatar-lg">TY</div>
+              <div class="profile-meta">
+                <span class="profile-name">Tushar Yadav</span>
+                <span class="profile-role">Lead Administrator</span>
+              </div>
+            </div>
+
+            <div class="profile-dropdown-divider"></div>
+
+            <!-- System Status -->
+            <div class="profile-dropdown-item" id="menuItemNotifications" tabindex="0" role="button">
+              <div class="item-icon-wrap">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+              </div>
+              <div class="item-text-group">
+                <span class="item-title">System Status</span>
+                <span class="item-sub" id="dropdownNotifSub">All systems operational</span>
+              </div>
+              <span class="notif-pill-badge" id="dropdownNotifBadge" style="background:#f1f5f9; color:#475569; font-weight:600;">Live</span>
+            </div>
+
+            <!-- Settings Link -->
+            <a href="#settings" class="profile-dropdown-item" id="menuItemSettings">
+              <div class="item-icon-wrap">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              </div>
+              <div class="item-text-group">
+                <span class="item-title">Settings</span>
+                <span class="item-sub">Preferences & brand</span>
+              </div>
+            </a>
+
+            <div class="profile-dropdown-divider"></div>
+
+            <!-- Logout Button -->
+            <button type="button" class="profile-dropdown-item logout-action" id="btnProfileLogout">
+              <div class="item-icon-wrap logout-icon-wrap">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              </div>
+              <div class="item-text-group">
+                <span class="logout-text">Log Out</span>
+                <span class="item-sub">End current session</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ========================================== -->
+    <!-- MAIN CONTENT AREA -->
+    <!-- ========================================== -->
+    <div class="main-wrapper">
+      <!-- TOPBAR -->
+      <header class="topbar">
+        <div class="topbar-search-area">
+          <div class="search-box" style="position: relative;">
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" placeholder="Search pages, developments, media..." id="globalSearchInput" autocomplete="off">
+            <button type="button" id="btnClearGlobalSearch" class="search-clear-btn" style="display: none;" title="Clear search">&times;</button>
+            <div id="globalSearchResultsDropdown" class="global-search-results" style="display: none;">
+              <div id="globalSearchResultsList" class="global-search-results-body"></div>
+            </div>
+          </div>
+
+          <!-- FILTERS ON THE RIGHT SIDE OF THE SEARCH BAR -->
+          <div class="topbar-filter-chips" id="topbarSearchFilterChips">
+            <button type="button" class="topbar-filter-chip active" data-filter="all">All</button>
+            <button type="button" class="topbar-filter-chip" data-filter="pages">Pages</button>
+            <button type="button" class="topbar-filter-chip" data-filter="landmarks">Developments</button>
+            <button type="button" class="topbar-filter-chip" data-filter="media">Media</button>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <button type="button" class="btn btn-dark" id="btnTopbarPublish" style="font-size: 11.5px; padding: 6px 14px; gap: 6px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Publish Changes</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- VIEW PANES CONTAINER -->
+      <main class="content-container">
+        <!-- ========================================== -->
+        <!-- TAB 1: DASHBOARD VIEW (MATCHES SCREENSHOT) -->
+        <!-- ========================================== -->
+        <div class="view-pane active" id="pane-dashboard">
+          <!-- WELCOME HERO BANNER -->
+          <div class="welcome-banner">
+            <div class="welcome-content">
+              <span class="welcome-pill">Welcome back, Tushar Yadav!</span>
+              <h1 class="welcome-title">Content Management System</h1>
+              <p class="welcome-subtitle">Update your website's text, images, videos and more — all in one place.</p>
+            </div>
+            <!-- Floating 3D Artwork Illustration -->
+            <div class="floating-illustration">
+              <div class="art-card art-text-card">
+                <span class="art-badge">Aa</span>
+                <div class="art-lines">
+                  <div class="art-line w-full"></div>
+                  <div class="art-line w-70"></div>
+                </div>
+              </div>
+              <div class="art-card art-img-card">
+                <img src="/media/images/landmarks/Serenity-hills-big.webp" alt="Preview Thumbnail">
+              </div>
+              <div class="art-card art-video-card">
+                <img src="/media/images/landmarks/property-main-image-706x385.jpg" alt="Video Card">
+                <div class="art-play-btn">▶</div>
+              </div>
+              <div class="art-sparkle sparkle-1">✦</div>
+              <div class="art-sparkle sparkle-2">✦</div>
+            </div>
+          </div>
+
+          <!-- 4 STATS CARDS -->
+          <div class="stats-grid">
+            <!-- Total Pages -->
+            <div class="stat-card">
+              <div class="stat-icon-wrap bg-blue-soft">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#09090b" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Total Pages</span>
+                <span class="stat-value" id="statPagesVal">2</span>
+                <span class="stat-trend trend-green">Live routes active</span>
+              </div>
+            </div>
+
+            <!-- Total Images -->
+            <div class="stat-card">
+              <div class="stat-icon-wrap bg-green-soft">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Total Images</span>
+                <span class="stat-value" id="statImagesVal">12</span>
+                <span class="stat-trend trend-green">Optimized webp/jpg</span>
+              </div>
+            </div>
+
+            <!-- Total Videos -->
+            <div class="stat-card">
+              <div class="stat-icon-wrap bg-purple-soft">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Total Videos</span>
+                <span class="stat-value" id="statVideosVal">1</span>
+                <span class="stat-trend trend-green">1080p full-res hero</span>
+              </div>
+            </div>
+
+            <!-- Last Updated -->
+            <div class="stat-card">
+              <div class="stat-icon-wrap bg-amber-soft">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Last Updated</span>
+                <span class="stat-value" id="statLastUpdatedVal" style="font-size: 16px;">Just now</span>
+                <span class="stat-meta" id="statLastUpdatedMeta">By Tushar Yadav</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- TWO-COLUMN DASHBOARD GRID -->
+          <div class="dashboard-grid">
+            <!-- LEFT COLUMN: CONTENT OVERVIEW -->
+            <div class="left-col">
+              <div class="section-header">
+                <div>
+                  <h2 class="section-title">Content Overview</h2>
+                  <p class="section-sub">Manage and edit your website's pages below.</p>
+                </div>
+                <button type="button" class="btn btn-outline" id="btnManagePagesDashboard" style="font-size: 11.5px; font-weight: 600; padding: 6px 12px; display: inline-flex; align-items: center; gap: 5px;">
+                  <span>Manage Pages</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+              </div>
+
+              <div class="overview-list" id="contentOverviewPagesList">
+                <div style="padding: 32px 16px; text-align: center; color: var(--text-muted); font-size: 12px;">Loading website pages...</div>
+              </div>
+            </div>
+
+            <!-- RIGHT COLUMN: STATUS & QUICK ACTIONS -->
+            <div class="right-col">
+              <!-- Live Site Card -->
+              <div class="widget-card live-site-widget">
+                <div class="live-widget-img-wrap">
+                  <img src="/media/images/landmarks/Serenity-hills-big.webp" alt="Website Preview" class="live-widget-img">
+                </div>
+                <div class="live-widget-body">
+                  <h3 class="live-widget-title">Live & Staging System</h3>
+                  <p class="live-widget-sub">Preview staged changes before releasing to live.</p>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <a href="/preview" target="_blank" class="btn btn-dark w-full">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                      <span>Preview Staged Changes</span>
+                    </a>
+                    <a href="http://localhost:3000" target="_blank" class="btn btn-secondary w-full">
+                      <span>View Live Website</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+
+
+        <!-- ========================================== -->
+        <!-- TAB 3: UPLOAD LIBRARY (WITH STORAGE LIMIT!) -->
+        <!-- ========================================== -->
+        <div class="view-pane" id="pane-library">
+          <div class="view-header">
+            <div>
+              <h2 class="view-title">Upload Library</h2>
+              <p class="view-sub">Manage uploaded images, vectors, and videos for your website.</p>
+            </div>
+            <!-- Filter Chips -->
+            <div class="filter-chips">
+              <button type="button" class="chip active" data-filter="all">All Files</button>
+              <button type="button" class="chip" data-filter="image">Images</button>
+              <button type="button" class="chip" data-filter="video">Videos</button>
+            </div>
+          </div>
+
+          <!-- Hidden storage quota elements kept for silent background tracking -->
+          <div style="display: none;" id="storageSilentTracker">
+            <span id="storageNumbersLabel"></span>
+            <div id="storageProgressBar"></div>
+            <span id="storageHintText"></span>
+            <span id="storagePercentLabel"></span>
+          </div>
+
+          <!-- Dropzone -->
+          <div class="dropzone-card" id="libraryDropzone">
+            <input type="file" id="libraryFileInput" multiple accept="image/*,video/*" hidden>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#09090b" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <span class="dropzone-text">Click to upload or drag & drop files here</span>
+            <span class="dropzone-sub">Supports high-resolution images & videos</span>
+          </div>
+
+          <!-- Media Visual Grid -->
+          <div class="media-grid" id="libraryMediaGrid">
+            <!-- Dynamically populated via JS -->
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 2: UNIFIED CONTENT EDITOR (TEXT, IMAGES, VIDEOS) -->
+        <!-- ========================================== -->
+        <div class="view-pane" id="pane-content">
+          <!-- Subnav Segment Switcher -->
+          <div class="content-editor-nav" style="flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <div class="content-page-selector-pill" style="display: inline-flex; align-items: center; gap: 8px; background: #ffffff; border: 1px solid #cbd5e1; padding: 5px 12px; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                <span style="font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Editing Page:</span>
+                <select id="contentEditorPageSelect" style="font-weight: 700; font-size: 13px; border: none; background: transparent; color: #0f172a; cursor: pointer; outline: none; padding-right: 4px;">
+                  <option value="/">Home Page (/)</option>
+                </select>
+              </div>
+            <div class="content-subnav-pill">
+              <button type="button" class="subnav-btn active" data-subtab="text" id="subtabBtnText">
+                <span class="subnav-icon-text">Aa</span>
+                <span>Text Content</span>
+              </button>
+              <button type="button" class="subnav-btn" data-subtab="images" id="subtabBtnImages">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                <span>Images & Landmarks</span>
+              </button>
+              <button type="button" class="subnav-btn" data-subtab="videos" id="subtabBtnVideos">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+                <span>Hero Video</span>
+              </button>
+            </div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <a href="/editor" target="_blank" class="btn btn-dark" id="btnOpenVisualEditor" style="padding: 7px 16px; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-weight: 600;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                <span>Editor Mode</span>
+              </a>
+              <button type="button" class="btn btn-primary" id="btnSaveTextContent" style="padding: 7px 16px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span>Save Staged Changes</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- SUBPANE 1: TEXT CONTENT (MODULAR PARTS WITH FORMATTER TOOLBARS) -->
+          <div class="content-subpane active" id="subpane-text">
+            <!-- WRAPPER: HOME PAGE EXCLUSIVE COMPONENTS -->
+            <div id="homePageComponentsWrapper">
+              <!-- PART 0: NAVIGATION HEADER & TOPBAR -->
+              <div class="modular-section-card">
+              <div class="modular-section-header">
+                <div class="modular-section-title-wrap">
+                  <span class="modular-section-badge">Section 00</span>
+                  <h3 class="modular-section-title">Navigation Header & Topbar</h3>
+                </div>
+                <span class="live-pill">Live Sync</span>
+              </div>
+              <div class="modular-section-body">
+                <div class="modular-preview-header">
+                  <span class="modular-preview-tag">Live Component Preview</span>
+                </div>
+                <div class="modular-preview-box">
+                  <div class="live-site-nav-preview">
+                    <div class="live-nav-left">
+                      <div class="live-hamburger-icon"><span></span><span></span><span></span></div>
+                      <img src="/images/emaar-india-logo-en.svg" alt="Header Logo" class="live-nav-logo" id="previewNavLogo">
+                    </div>
+                    <div class="live-nav-center" id="previewNavLinks">
+                      <span class="live-nav-link">ABOUT US</span>
+                      <span class="live-nav-link">LATEST LAUNCHES</span>
+                      <div class="live-nav-dropdown-wrap">
+                        <span class="live-nav-link live-nav-dropdown-trigger">
+                          <span>PROJECTS</span>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </span>
+                        <div class="live-nav-dropdown-menu" id="previewProjectsDropdown">
+                          <span class="dropdown-item">Residential</span>
+                          <span class="dropdown-item">Commercial</span>
+                        </div>
+                      </div>
+                      <span class="live-nav-link">SUSTAINABILITY</span>
+                    </div>
+                    <div class="live-nav-right">
+                      <!-- Phone Icon with Number Interlinked (tel: href & tooltip title) -->
+                      <a href="tel:+911244421155" class="live-nav-call" title="Call: +91 124 4421155" id="previewNavCallLink" aria-label="Call Inquiries">
+                        <img src="/images/call.svg" alt="Call" id="previewNavCallImg" style="width:14px; height:14px; object-fit:contain; display:block;">
+                      </a>
+                      <!-- WhatsApp Icon with Number Interlinked -->
+                      <a href="https://wa.me/911244421155" target="_blank" class="live-nav-wa" title="WhatsApp: +91 124 4421155" id="previewNavWaLink" aria-label="WhatsApp">
+                        <img src="/images/whatsapp.svg" alt="WhatsApp" id="previewNavWaImg" style="width:16px; height:16px; object-fit:contain; display:block;">
+                      </a>
+                      <a href="/contact" class="live-nav-cta" id="previewNavCta">GET IN TOUCH</a>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Fields to Edit Topbar / Header -->
+                <div>
+                  <div class="form-grid-3 mb-3">
+                    <!-- 1. Phone & Icon -->
+                    <div class="form-group mb-0">
+                      <label class="form-label" for="editNavPhone">Inquiries Phone Number</label>
+                      <input type="text" id="editNavPhone" class="form-input mb-2" value="+91 124 4421155">
+                      <div class="image-replace-box" style="margin-top:0;">
+                        <div class="image-replace-meta">
+                          <img src="/images/call.svg" alt="Phone Icon" class="image-mini-thumb" id="navPhoneIconThumb" style="background:#f1f5f9; object-fit:contain; width:22px; height:22px;">
+                          <div class="image-replace-info-col">
+                            <span class="image-replace-label">Phone Icon</span>
+                            <span class="image-current-path" id="navPhoneIconPath">/images/call.svg</span>
+                          </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-xs" id="btnReplaceNavPhoneIcon">Change Icon</button>
+                      </div>
+                    </div>
+
+                    <!-- 2. WhatsApp & Icon -->
+                    <div class="form-group mb-0">
+                      <label class="form-label" for="editNavWhatsapp">WhatsApp Link / Number</label>
+                      <input type="text" id="editNavWhatsapp" class="form-input mb-2" value="+91 124 4421155">
+                      <div class="image-replace-box" style="margin-top:0;">
+                        <div class="image-replace-meta">
+                          <img src="/images/whatsapp.svg" alt="WhatsApp Icon" class="image-mini-thumb" id="navWaIconThumb" style="background:#f1f5f9; object-fit:contain; width:22px; height:22px;">
+                          <div class="image-replace-info-col">
+                            <span class="image-replace-label">WhatsApp Icon</span>
+                            <span class="image-current-path" id="navWaIconPath">/images/whatsapp.svg</span>
+                          </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-xs" id="btnReplaceNavWaIcon">Change Icon</button>
+                      </div>
+                    </div>
+
+                    <!-- 3. CTA Label & Link -->
+                    <div class="form-group mb-0">
+                      <label class="form-label" for="editNavCtaText">CTA Button Label</label>
+                      <input type="text" id="editNavCtaText" class="form-input mb-2" value="GET IN TOUCH">
+                      <label class="form-label" for="editNavCtaLink">CTA Destination Link</label>
+                      <input type="text" id="editNavCtaLink" class="form-input" value="/contact">
+                    </div>
+                  </div>
+
+                  <!-- Navigation Menu Structure with Clear Dropdown Hierarchy -->
+                  <div class="form-grid-2 mb-2">
+                    <div class="form-group mb-0">
+                      <label class="form-label" for="editNavLinksText">Navbar Menu Items (Comma Separated)</label>
+                      <input type="text" id="editNavLinksText" class="form-input" value="ABOUT US, LATEST LAUNCHES, PROJECTS, SUSTAINABILITY">
+                      <span style="font-size: 10.5px; color: #64748b; margin-top: 3px; display: block;">&ldquo;PROJECTS&rdquo; automatically acts as a dropdown trigger menu.</span>
+                    </div>
+
+                    <div class="image-replace-box" style="margin-top: 0;">
+                      <div class="image-replace-meta">
+                        <img src="/images/emaar-india-logo-en.svg" alt="Logo" class="image-mini-thumb" id="navLogoThumbImg" style="background:#f1f5f9; object-fit:contain;">
+                        <div class="image-replace-info-col">
+                          <span class="image-replace-label">Header Brand Logo</span>
+                          <span class="image-current-path" id="navLogoImgPath">/images/emaar-india-logo-en.svg</span>
+                        </div>
+                      </div>
+                      <button type="button" class="btn btn-secondary btn-xs" id="btnReplaceNavLogo">Change Logo</button>
+                    </div>
+                  </div>
+
+                  <!-- Explicit Nested Dropdown Child Config for PROJECTS -->
+                  <div style="background: #f1f5f9; border-left: 3px solid #2563eb; padding: 10px 14px; border-radius: 4px; margin-top: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 10px; font-weight: 700; background: #2563eb; color: #ffffff; padding: 1px 6px; border-radius: 3px; text-transform: uppercase;">Child Dropdown</span>
+                        <strong style="font-size: 12px; color: #0f172a;">Sub-Menu Options for the &ldquo;PROJECTS&rdquo; Dropdown</strong>
+                      </div>
+                      <span style="font-size: 10.5px; color: #64748b;">(Triggered when clicking &ldquo;PROJECTS ▾&rdquo; in navbar)</span>
+                    </div>
+                    <label class="form-label" for="editNavProjectsDropdown" style="font-size: 11px; color: #475569; margin-bottom: 4px;">Projects Dropdown Sub-Items (Comma Separated)</label>
+                    <input type="text" id="editNavProjectsDropdown" class="form-input" value="Residential, Commercial">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- PART 1: BUILT ON LEGACY -->
+            <div class="modular-section-card">
+              <div class="modular-section-header">
+                <div class="modular-section-title-wrap">
+                  <span class="modular-section-badge">Section 01</span>
+                  <h3 class="modular-section-title">Built on Legacy — Editorial Intro</h3>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="live-pill">Live Sync</span>
+                  <svg class="modular-section-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+              </div>
+              <div class="modular-section-body">
+                <!-- Preview Header Placed Cleanly ABOVE the Preview Box -->
+                <div class="modular-preview-header">
+                  <span class="modular-preview-tag">Live Component Preview</span>
+                </div>
+                <div class="modular-preview-box">
+                  <div class="live-site-legacy-sec" style="margin-bottom:0;">
+                    <h2 class="live-site-legacy-title" id="previewLegacyHeading">BUILT ON LEGACY, DESIGNED FOR LIFE</h2>
+                    <div class="live-site-legacy-desc" id="previewLegacyDesc">For decades, Emaar has shaped some of the world’s most recognisable landmarks through visionary architecture, thoughtful design and a commitment to excellence. Building on this global legacy, Emaar India continues to create distinctive spaces across residential and commercial destinations. Each development reflects a shared belief in creating places that are designed to endure and inspire generations to come.</div>
+                  </div>
+                </div>
+
+                <!-- Fields with Auto-Appearing Ribbon Toolbars -->
+                <div>
+                  <div class="form-group mb-3">
+                    <label class="form-label">Heading</label>
+                    <div class="word-editor-wrapper">
+                      <div class="word-ribbon-toolbar" data-editor-target="editTextLegacyTitleRich">
+                        <div class="word-toolbar-group">
+                          <select class="word-tool-select word-font-family" title="Font Family">
+                            <option value="Optima, Cinzel, serif" selected>Optima (Luxury Serif)</option>
+                            <option value="Cinzel, serif">Cinzel (Display)</option>
+                            <option value="Lato, sans-serif">Lato (Sans-Serif)</option>
+                            <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</option>
+                          </select>
+                          <select class="word-tool-select word-font-size" title="Font Size">
+                            <option value="20px">20px</option>
+                            <option value="24px">24px</option>
+                            <option value="28px">28px</option>
+                            <option value="32px" selected>32px</option>
+                            <option value="36px">36px</option>
+                            <option value="42px">42px</option>
+                            <option value="48px">48px</option>
+                          </select>
+                        </div>
+                        <div class="word-toolbar-group">
+                          <button type="button" class="word-tool-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+                          <button type="button" class="word-tool-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+                          <button type="button" class="word-tool-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+                        </div>
+                        <div class="word-toolbar-group">
+                          <label class="word-color-btn" title="Text Color">
+                            <span style="font-size:12px; font-weight:800; line-height:1;">A</span>
+                            <span class="color-bar-indicator word-fore-bar" style="background:#111111;"></span>
+                            <input type="color" class="word-fore-color" value="#111111">
+                          </label>
+                        </div>
+                        <div class="word-toolbar-group" style="border-right:none;">
+                          <button type="button" class="word-tool-btn" data-cmd="justifyLeft" title="Align Left">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+                          </button>
+                          <button type="button" class="word-tool-btn" data-cmd="justifyCenter" title="Align Center">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>
+                          </button>
+                          <button type="button" class="word-tool-btn" data-cmd="justifyRight" title="Align Right">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="7" y2="18"></line></svg>
+                          </button>
+                          <button type="button" class="word-tool-btn" data-cmd="removeFormat" title="Clear Formatting">Tx</button>
+                        </div>
+                      </div>
+                      <div class="word-editor-canvas heading-canvas" id="editTextLegacyTitleRich" contenteditable="true" data-placeholder="Enter heading...">BUILT ON LEGACY, DESIGNED FOR LIFE</div>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Body Description</label>
+                    <div class="word-editor-wrapper">
+                      <div class="word-ribbon-toolbar" data-editor-target="editTextLegacyBodyRich">
+                        <div class="word-toolbar-group">
+                          <select class="word-tool-select word-font-family" title="Font Family">
+                            <option value="Lato, sans-serif" selected>Lato (Website Default)</option>
+                            <option value="Optima, Cinzel, serif">Optima (Luxury Serif)</option>
+                            <option value="Cinzel, serif">Cinzel (Display)</option>
+                            <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</option>
+                            <option value="Georgia, serif">Georgia</option>
+                          </select>
+                          <select class="word-tool-select word-font-size" title="Font Size">
+                            <option value="12px">12px</option>
+                            <option value="13px">13px</option>
+                            <option value="14px">14px</option>
+                            <option value="15px" selected>15px</option>
+                            <option value="16px">16px</option>
+                            <option value="18px">18px</option>
+                            <option value="20px">20px</option>
+                            <option value="24px">24px</option>
+                          </select>
+                        </div>
+                        <div class="word-toolbar-group">
+                          <button type="button" class="word-tool-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+                          <button type="button" class="word-tool-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+                          <button type="button" class="word-tool-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+                          <button type="button" class="word-tool-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+                        </div>
+                        <div class="word-toolbar-group">
+                          <label class="word-color-btn" title="Text Color">
+                            <span style="font-size:12px; font-weight:800; line-height:1;">A</span>
+                            <span class="color-bar-indicator word-fore-bar" style="background:#111111;"></span>
+                            <input type="color" class="word-fore-color" value="#111111">
+                          </label>
+                          <label class="word-color-btn" title="Highlight Color">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11-6 6v3h3l6-6"></path><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"></path></svg>
+                            <span class="color-bar-indicator word-hilite-bar" style="background:#fef08a;"></span>
+                            <input type="color" class="word-hilite-color" value="#fef08a">
+                          </label>
+                        </div>
+                        <div class="word-toolbar-group">
+                          <button type="button" class="word-tool-btn" data-cmd="justifyLeft" title="Align Left">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+                          </button>
+                          <button type="button" class="word-tool-btn" data-cmd="justifyCenter" title="Align Center">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>
+                          </button>
+                          <button type="button" class="word-tool-btn" data-cmd="justifyRight" title="Align Right">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="7" y2="18"></line></svg>
+                          </button>
+                        </div>
+                        <div class="word-toolbar-group" style="border-right:none;">
+                          <button type="button" class="word-tool-btn" data-cmd="insertUnorderedList" title="Bulleted List">•≡</button>
+                          <button type="button" class="word-tool-btn" data-cmd="removeFormat" title="Clear">Tx</button>
+                          <button type="button" class="word-tool-btn" data-cmd="undo" title="Undo">↶</button>
+                          <button type="button" class="word-tool-btn" data-cmd="redo" title="Redo">↷</button>
+                        </div>
+                      </div>
+                      <div class="word-editor-canvas" id="editTextLegacyBodyRich" contenteditable="true" data-placeholder="Enter description text...">For decades, Emaar has shaped some of the world’s most recognisable landmarks through visionary architecture, thoughtful design and a commitment to excellence. Building on this global legacy, Emaar India continues to create distinctive spaces across residential and commercial destinations. Each development reflects a shared belief in creating places that are designed to endure and inspire generations to come.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- PART 2: PROJECT WALKTHROUGHS -->
+            <div class="modular-section-card">
+              <div class="modular-section-header">
+                <div class="modular-section-title-wrap">
+                  <span class="modular-section-badge">Section 02</span>
+                  <h3 class="modular-section-title">Project Walkthroughs</h3>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="live-pill">Live Sync</span>
+                  <svg class="modular-section-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+              </div>
+              <div class="modular-section-body">
+                <!-- Preview Header Placed Cleanly ABOVE the Preview Box -->
+                <div class="modular-preview-header">
+                  <span class="modular-preview-tag">Live Component Preview</span>
+                </div>
+                <div class="modular-preview-box">
+                  <div class="modular-walkthrough-preview" style="max-width: 620px;">
+                    <div class="live-site-badge-row">
+                      <span id="previewWalkBadge">NEW</span>
+                      <span class="live-site-badge-line"></span>
+                    </div>
+                    <h2 class="live-site-col-title" style="margin-top: 8px;">
+                      <span id="previewWalkTitle">PROJECT WALKTHROUGHS</span>
+                      <p class="live-site-col-sub" id="previewWalkSub">EXPLORE EMAAR INDIA FROM WHEREVER YOU ARE IN DETAIL.</p>
+                    </h2>
+                    <div>
+                      <img src="/images/project-walkthrough.jpg" alt="Walkthrough" class="live-site-walkthrough-img" id="previewWalkImg">
+                      <div class="live-site-caption-text" id="previewWalkCaption">STEP INSIDE EMAAR INDIA'S PROPERTIES THROUGH IMMERSIVE WALKTHROUGHS AND EXPERIENCE THE SPACES BEFORE YOU ARRIVE.</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Fields with Auto-Appearing Ribbon Toolbars & Image Replacer -->
+                <div>
+                  <div class="form-grid-2 mb-3">
+                    <div class="form-group">
+                      <label class="form-label">Section Title</label>
+                      <div class="word-editor-wrapper">
+                        <div class="word-ribbon-toolbar" data-editor-target="editTextWalkTitleRich">
+                          <div class="word-toolbar-group">
+                            <select class="word-tool-select word-font-family">
+                              <option value="Optima, Cinzel, serif" selected>Optima</option>
+                              <option value="Lato, sans-serif">Lato</option>
+                              <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</option>
+                            </select>
+                            <select class="word-tool-select word-font-size" title="Font Size">
+                              <option value="18px">18px</option>
+                              <option value="20px">20px</option>
+                              <option value="24px" selected>24px</option>
+                              <option value="28px">28px</option>
+                              <option value="32px">32px</option>
+                              <option value="36px">36px</option>
+                            </select>
+                          </div>
+                          <div class="word-toolbar-group">
+                            <button type="button" class="word-tool-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+                            <button type="button" class="word-tool-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+                          </div>
+                          <div class="word-toolbar-group">
+                            <label class="word-color-btn" title="Text Color">
+                              <span style="font-size:12px; font-weight:800; line-height:1;">A</span>
+                              <span class="color-bar-indicator word-fore-bar" style="background:#111111;"></span>
+                              <input type="color" class="word-fore-color" value="#111111">
+                            </label>
+                          </div>
+                          <div class="word-toolbar-group" style="border-right:none;">
+                            <button type="button" class="word-tool-btn" data-cmd="justifyLeft" title="Align Left">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+                            </button>
+                            <button type="button" class="word-tool-btn" data-cmd="justifyCenter" title="Align Center">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>
+                            </button>
+                            <button type="button" class="word-tool-btn" data-cmd="justifyRight" title="Align Right">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="7" y2="18"></line></svg>
+                            </button>
+                          </div>
+                        </div>
+                        <div class="word-editor-canvas heading-canvas" id="editTextWalkTitleRich" contenteditable="true">PROJECT WALKTHROUGHS</div>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="editTextWalkBadge">Badge Text</label>
+                      <input type="text" id="editTextWalkBadge" class="form-input" value="NEW" style="height: 42px;">
+                    </div>
+                  </div>
+
+                  <div class="form-group mb-3">
+                    <label class="form-label">Subtitle</label>
+                    <div class="word-editor-wrapper">
+                      <div class="word-ribbon-toolbar" data-editor-target="editTextWalkSubRich">
+                        <div class="word-toolbar-group">
+                          <select class="word-tool-select word-font-family">
+                            <option value="Lato, sans-serif" selected>Lato</option>
+                            <option value="Optima, Cinzel, serif">Optima</option>
+                          </select>
+                          <select class="word-tool-select word-font-size">
+                            <option value="12px">12px</option>
+                            <option value="13px" selected>13px</option>
+                            <option value="14px">14px</option>
+                          </select>
+                        </div>
+                        <div class="word-toolbar-group" style="border-right:none;">
+                          <button type="button" class="word-tool-btn" data-cmd="bold"><b>B</b></button>
+                          <button type="button" class="word-tool-btn" data-cmd="italic"><i>I</i></button>
+                          <button type="button" class="word-tool-btn" data-cmd="removeFormat">Tx</button>
+                        </div>
+                      </div>
+                      <div class="word-editor-canvas heading-canvas" id="editTextWalkSubRich" contenteditable="true">EXPLORE EMAAR INDIA FROM WHEREVER YOU ARE IN DETAIL.</div>
+                    </div>
+                  </div>
+
+                  <!-- Walkthrough Image Replace Card -->
+                  <div class="form-group mb-3">
+                    <label class="form-label">Walkthrough Image</label>
+                    <div class="image-replace-box">
+                      <div class="image-replace-meta">
+                        <img src="/images/project-walkthrough.jpg" alt="Walkthrough" class="image-mini-thumb" id="walkCurrentImgThumb">
+                        <div class="image-replace-info-col">
+                          <span class="image-replace-label">Current Feature Image</span>
+                          <span class="image-current-path" id="walkCurrentImgPath">/images/project-walkthrough.jpg</span>
+                        </div>
+                      </div>
+                      <button type="button" class="btn btn-secondary btn-sm" id="btnOpenWalkImgPicker">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                        <span>Change Image</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Caption Text</label>
+                    <div class="word-editor-wrapper">
+                      <div class="word-ribbon-toolbar" data-editor-target="editTextWalkCaptionRich">
+                        <div class="word-toolbar-group">
+                          <select class="word-tool-select word-font-family">
+                            <option value="Lato, sans-serif" selected>Lato (Default)</option>
+                            <option value="Optima, Cinzel, serif">Optima (Serif)</option>
+                            <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</option>
+                          </select>
+                          <select class="word-tool-select word-font-size">
+                            <option value="11px" selected>11px</option>
+                            <option value="12px">12px</option>
+                            <option value="13px">13px</option>
+                            <option value="14px">14px</option>
+                          </select>
+                        </div>
+                        <div class="word-toolbar-group">
+                          <button type="button" class="word-tool-btn" data-cmd="bold"><b>B</b></button>
+                          <button type="button" class="word-tool-btn" data-cmd="italic"><i>I</i></button>
+                          <button type="button" class="word-tool-btn" data-cmd="underline"><u>U</u></button>
+                        </div>
+                        <div class="word-toolbar-group">
+                          <label class="word-color-btn" title="Text Color">
+                            <span style="font-size:12px; font-weight:800; line-height:1;">A</span>
+                            <span class="color-bar-indicator word-fore-bar" style="background:#111111;"></span>
+                            <input type="color" class="word-fore-color" value="#111111">
+                          </label>
+                        </div>
+                        <div class="word-toolbar-group" style="border-right:none;">
+                          <button type="button" class="word-tool-btn" data-cmd="justifyLeft" title="Align Left">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+                          </button>
+                          <button type="button" class="word-tool-btn" data-cmd="justifyCenter" title="Align Center">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>
+                          </button>
+                          <button type="button" class="word-tool-btn" data-cmd="justifyRight" title="Align Right">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="7" y2="18"></line></svg>
+                          </button>
+                          <button type="button" class="word-tool-btn" data-cmd="removeFormat" title="Clear">Tx</button>
+                        </div>
+                      </div>
+                      <div class="word-editor-canvas" id="editTextWalkCaptionRich" contenteditable="true" data-placeholder="Enter caption text...">STEP INSIDE EMAAR INDIA'S PROPERTIES THROUGH IMMERSIVE WALKTHROUGHS AND EXPERIENCE THE SPACES BEFORE YOU ARRIVE.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- PART 3: DISCOVER OUR BLOGS -->
+            <div class="modular-section-card">
+              <div class="modular-section-header">
+                <div class="modular-section-title-wrap">
+                  <span class="modular-section-badge">Section 03</span>
+                  <h3 class="modular-section-title">Discover Our Blogs & Articles</h3>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="live-pill">Live Sync</span>
+                  <svg class="modular-section-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+              </div>
+              <div class="modular-section-body">
+                <!-- Preview Header Placed Cleanly ABOVE the Preview Box -->
+                <div class="modular-preview-header">
+                  <span class="modular-preview-tag">Live Component Preview</span>
+                </div>
+                <div class="modular-preview-box">
+                  <div class="modular-blogs-preview">
+                    <div class="live-site-blog-header">
+                      <h2 class="live-site-col-title" style="margin-bottom:0;">
+                        <span id="previewBlogTitle">DISCOVER OUR BLOGS</span>
+                        <p class="live-site-col-sub" id="previewBlogSub">READ INSIGHTS ON REAL ESTATE, LIFESTYLE, INVESTMENT AND THE PLACES SHAPING INDIA.</p>
+                      </h2>
+                      <span class="live-site-view-all">VIEW ALL</span>
+                    </div>
+                    <div class="live-site-blog-cards" style="margin-top: 14px;">
+                      <div>
+                        <img src="/images/blog1.jpg" alt="Blog 1" class="live-site-blog-img" id="previewBlog1Img">
+                        <p class="live-site-caption-text" id="previewBlog1Caption">EMAAR INDIA: BESPOKE, LUXURIOUS & SUSTAINABLE LIVING</p>
+                      </div>
+                      <div>
+                        <img src="/images/blog2.jpg" alt="Blog 2" class="live-site-blog-img" id="previewBlog2Img">
+                        <p class="live-site-caption-text" id="previewBlog2Caption">DIGI HOMES VS URBAN OASIS: SMART LUXURY IN SECTOR 62</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Fields with Auto-Appearing Ribbon Toolbars -->
+                <div>
+                  <div class="form-grid-2 mb-3">
+                    <div class="form-group">
+                      <label class="form-label">Section Title</label>
+                      <div class="word-editor-wrapper">
+                        <div class="word-ribbon-toolbar" data-editor-target="editTextBlogTitleRich">
+                          <div class="word-toolbar-group">
+                            <select class="word-tool-select word-font-family">
+                              <option value="Optima, Cinzel, serif" selected>Optima</option>
+                              <option value="Lato, sans-serif">Lato</option>
+                              <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</option>
+                            </select>
+                            <select class="word-tool-select word-font-size" title="Font Size">
+                              <option value="18px">18px</option>
+                              <option value="20px">20px</option>
+                              <option value="24px" selected>24px</option>
+                              <option value="28px">28px</option>
+                              <option value="32px">32px</option>
+                              <option value="36px">36px</option>
+                            </select>
+                          </div>
+                          <div class="word-toolbar-group">
+                            <button type="button" class="word-tool-btn" data-cmd="bold"><b>B</b></button>
+                            <button type="button" class="word-tool-btn" data-cmd="italic"><i>I</i></button>
+                          </div>
+                          <div class="word-toolbar-group">
+                            <label class="word-color-btn" title="Text Color">
+                              <span style="font-size:12px; font-weight:800; line-height:1;">A</span>
+                              <span class="color-bar-indicator word-fore-bar" style="background:#111111;"></span>
+                              <input type="color" class="word-fore-color" value="#111111">
+                            </label>
+                          </div>
+                          <div class="word-toolbar-group" style="border-right:none;">
+                            <button type="button" class="word-tool-btn" data-cmd="justifyLeft" title="Align Left">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+                            </button>
+                            <button type="button" class="word-tool-btn" data-cmd="justifyCenter" title="Align Center">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>
+                            </button>
+                            <button type="button" class="word-tool-btn" data-cmd="justifyRight" title="Align Right">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="7" y2="18"></line></svg>
+                            </button>
+                          </div>
+                        </div>
+                        <div class="word-editor-canvas heading-canvas" id="editTextBlogTitleRich" contenteditable="true">DISCOVER OUR BLOGS</div>
+                      </div>
+                    </div>
+
+                    <div class="form-group">
+                      <label class="form-label">Subtitle</label>
+                      <div class="word-editor-wrapper">
+                        <div class="word-ribbon-toolbar" data-editor-target="editTextBlogSubRich">
+                          <div class="word-toolbar-group">
+                            <select class="word-tool-select word-font-family">
+                              <option value="Lato, sans-serif" selected>Lato</option>
+                              <option value="Optima, Cinzel, serif">Optima</option>
+                            </select>
+                            <select class="word-tool-select word-font-size" title="Font Size">
+                              <option value="11px">11px</option>
+                              <option value="12px">12px</option>
+                              <option value="13px" selected>13px</option>
+                              <option value="14px">14px</option>
+                              <option value="16px">16px</option>
+                            </select>
+                          </div>
+                          <div class="word-toolbar-group">
+                            <button type="button" class="word-tool-btn" data-cmd="bold"><b>B</b></button>
+                            <button type="button" class="word-tool-btn" data-cmd="italic"><i>I</i></button>
+                          </div>
+                          <div class="word-toolbar-group" style="border-right:none;">
+                            <button type="button" class="word-tool-btn" data-cmd="justifyLeft" title="Align Left">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+                            </button>
+                            <button type="button" class="word-tool-btn" data-cmd="justifyCenter" title="Align Center">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>
+                            </button>
+                          </div>
+                        </div>
+                        <div class="word-editor-canvas heading-canvas" id="editTextBlogSubRich" contenteditable="true">READ INSIGHTS ON REAL ESTATE, LIFESTYLE, INVESTMENT AND THE PLACES SHAPING INDIA.</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Blog Image Replacers -->
+                  <div class="form-grid-2">
+                    <div class="image-replace-box">
+                      <div class="image-replace-meta">
+                        <img src="/images/blog1.jpg" alt="Blog 1" class="image-mini-thumb" id="blog1ThumbImg">
+                        <div class="image-replace-info-col">
+                          <span class="image-replace-label">Blog 1 Image</span>
+                          <span class="image-current-path" id="blog1ImgPath">/images/blog1.jpg</span>
+                        </div>
+                      </div>
+                      <button type="button" class="btn btn-secondary btn-xs" id="btnReplaceBlog1Img">Change</button>
+                    </div>
+
+                    <div class="image-replace-box">
+                      <div class="image-replace-meta">
+                        <img src="/images/blog2.jpg" alt="Blog 2" class="image-mini-thumb" id="blog2ThumbImg">
+                        <div class="image-replace-info-col">
+                          <span class="image-replace-label">Blog 2 Image</span>
+                          <span class="image-current-path" id="blog2ImgPath">/images/blog2.jpg</span>
+                        </div>
+                      </div>
+                      <button type="button" class="btn btn-secondary btn-xs" id="btnReplaceBlog2Img">Change</button>
+                    </div>
+                  </div>
+
+                  <!-- Blog Captions with MS Word-Style Ribbon Toolbars -->
+                  <div class="form-grid-2 mt-3">
+                    <div class="form-group">
+                      <label class="form-label">Blog 1 Caption</label>
+                      <div class="word-editor-wrapper">
+                        <div class="word-ribbon-toolbar" data-editor-target="editTextBlog1CaptionRich">
+                          <div class="word-toolbar-group">
+                            <select class="word-tool-select word-font-family">
+                              <option value="Lato, sans-serif" selected>Lato</option>
+                              <option value="Optima, Cinzel, serif">Optima</option>
+                            </select>
+                            <select class="word-tool-select word-font-size" title="Font Size">
+                              <option value="10px">10px</option>
+                              <option value="11px" selected>11px</option>
+                              <option value="12px">12px</option>
+                              <option value="13px">13px</option>
+                              <option value="14px">14px</option>
+                            </select>
+                          </div>
+                          <div class="word-toolbar-group">
+                            <button type="button" class="word-tool-btn" data-cmd="bold"><b>B</b></button>
+                            <button type="button" class="word-tool-btn" data-cmd="italic"><i>I</i></button>
+                          </div>
+                          <div class="word-toolbar-group">
+                            <label class="word-color-btn" title="Text Color">
+                              <span style="font-size:12px; font-weight:800; line-height:1;">A</span>
+                              <span class="color-bar-indicator word-fore-bar" style="background:#111111;"></span>
+                              <input type="color" class="word-fore-color" value="#111111">
+                            </label>
+                          </div>
+                          <div class="word-toolbar-group" style="border-right:none;">
+                            <button type="button" class="word-tool-btn" data-cmd="justifyLeft" title="Align Left">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+                            </button>
+                            <button type="button" class="word-tool-btn" data-cmd="justifyCenter" title="Align Center">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>
+                            </button>
+                          </div>
+                        </div>
+                        <div class="word-editor-canvas" id="editTextBlog1CaptionRich" contenteditable="true">EMAAR INDIA: BESPOKE, LUXURIOUS & SUSTAINABLE LIVING</div>
+                      </div>
+                    </div>
+
+                    <div class="form-group">
+                      <label class="form-label">Blog 2 Caption</label>
+                      <div class="word-editor-wrapper">
+                        <div class="word-ribbon-toolbar" data-editor-target="editTextBlog2CaptionRich">
+                          <div class="word-toolbar-group">
+                            <select class="word-tool-select word-font-family">
+                              <option value="Lato, sans-serif" selected>Lato</option>
+                              <option value="Optima, Cinzel, serif">Optima</option>
+                            </select>
+                            <select class="word-tool-select word-font-size" title="Font Size">
+                              <option value="10px">10px</option>
+                              <option value="11px" selected>11px</option>
+                              <option value="12px">12px</option>
+                              <option value="13px">13px</option>
+                              <option value="14px">14px</option>
+                            </select>
+                          </div>
+                          <div class="word-toolbar-group">
+                            <button type="button" class="word-tool-btn" data-cmd="bold"><b>B</b></button>
+                            <button type="button" class="word-tool-btn" data-cmd="italic"><i>I</i></button>
+                          </div>
+                          <div class="word-toolbar-group">
+                            <label class="word-color-btn" title="Text Color">
+                              <span style="font-size:12px; font-weight:800; line-height:1;">A</span>
+                              <span class="color-bar-indicator word-fore-bar" style="background:#111111;"></span>
+                              <input type="color" class="word-fore-color" value="#111111">
+                            </label>
+                          </div>
+                          <div class="word-toolbar-group" style="border-right:none;">
+                            <button type="button" class="word-tool-btn" data-cmd="justifyLeft" title="Align Left">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+                            </button>
+                            <button type="button" class="word-tool-btn" data-cmd="justifyCenter" title="Align Center">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>
+                            </button>
+                          </div>
+                        </div>
+                        <div class="word-editor-canvas" id="editTextBlog2CaptionRich" contenteditable="true">DIGI HOMES VS URBAN OASIS: SMART LUXURY IN SECTOR 62</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- PART 4: GLOBAL FOOTER -->
+            <div class="modular-section-card">
+              <div class="modular-section-header">
+                <div class="modular-section-title-wrap">
+                  <span class="modular-section-badge">Section 04</span>
+                  <h3 class="modular-section-title">Website Global Footer & Navigation</h3>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="live-pill">Live Sync</span>
+                  <svg class="modular-section-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+              </div>
+              <div class="modular-section-body">
+                <div class="modular-preview-header">
+                  <span class="modular-preview-tag">Live Component Preview</span>
+                </div>
+                <div class="modular-preview-box">
+                  <div class="live-site-footer-preview">
+                    <!-- Top Row: Logo, Social Icons & Newsletter Subscription -->
+                    <div class="live-footer-top">
+                      <div class="live-footer-brand-wrap">
+                        <img src="/images/emaar-india-logo-en.svg" alt="Footer Logo" class="live-footer-logo" id="previewFooterLogo">
+                        <div class="live-footer-vdiv"></div>
+                        <div class="live-footer-social-list" id="previewFooterSocials">
+                          <!-- Facebook -->
+                          <a href="#" class="live-footer-social-btn" title="Facebook" id="previewSocialFb">
+                            <svg fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"></path></svg>
+                          </a>
+                          <!-- X / Twitter -->
+                          <a href="#" class="live-footer-social-btn" title="Twitter / X" id="previewSocialTw">
+                            <svg viewBox="0 0 1024 1024" fill="currentColor"><path d="M818 800 498.11 333.745l.546.437L787.084 0h-96.385L455.738 272 269.15 0H16.367l298.648 435.31-.036-.037L0 800h96.385l261.222-302.618L565.217 800zM230.96 72.727l448.827 654.546h-76.38L154.217 72.727z" transform="translate(103 112)"></path></svg>
+                          </a>
+                          <!-- YouTube -->
+                          <a href="#" class="live-footer-social-btn" title="YouTube" id="previewSocialYt">
+                            <svg fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"></path></svg>
+                          </a>
+                          <!-- Instagram -->
+                          <a href="#" class="live-footer-social-btn" title="Instagram" id="previewSocialIg">
+                            <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"></path></svg>
+                          </a>
+                          <!-- LinkedIn -->
+                          <a href="#" class="live-footer-social-btn" title="LinkedIn" id="previewSocialLi">
+                            <svg fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"></path></svg>
+                          </a>
+                        </div>
+                      </div>
+
+                      <!-- Newsletter Box Preview -->
+                      <div class="live-footer-newsletter-wrap">
+                        <div class="live-footer-news-form">
+                          <input type="text" class="live-footer-news-input" id="previewFooterNewsPlaceholder" placeholder="Enter email" readonly>
+                          <button type="button" class="live-footer-news-btn" id="previewFooterNewsBtn">SUBSCRIBE</button>
+                         </div>
+                       </div>
+                     </div>
+
+                    <!-- 6 Navigation Columns — Live Site Accordion Style (matches footer.jsx exactly) -->
+                    <div class="live-footer-accordion-grid" id="previewFooterColsGrid">
+                      <!-- Col 1 -->
+                      <div class="live-footer-acc-row" data-col="1">
+                        <button type="button" class="live-footer-acc-btn" data-toggle-col="1">
+                          <span class="live-footer-acc-title" id="previewFooterCol1Title">ABOUT EMAAR</span>
+                          <svg class="live-footer-acc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <ul class="live-footer-acc-list" id="previewFooterCol1Links"></ul>
+                      </div>
+                      <!-- Col 2 -->
+                      <div class="live-footer-acc-row" data-col="2">
+                        <button type="button" class="live-footer-acc-btn" data-toggle-col="2">
+                          <span class="live-footer-acc-title" id="previewFooterCol2Title">PROJECTS</span>
+                          <svg class="live-footer-acc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <ul class="live-footer-acc-list" id="previewFooterCol2Links"></ul>
+                      </div>
+                      <!-- Col 3 -->
+                      <div class="live-footer-acc-row" data-col="3">
+                        <button type="button" class="live-footer-acc-btn" data-toggle-col="3">
+                          <span class="live-footer-acc-title" id="previewFooterCol3Title">MASTER DEVELOPMENTS</span>
+                          <svg class="live-footer-acc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <ul class="live-footer-acc-list" id="previewFooterCol3Links"></ul>
+                      </div>
+                      <!-- Col 4 -->
+                      <div class="live-footer-acc-row" data-col="4">
+                        <button type="button" class="live-footer-acc-btn" data-toggle-col="4">
+                          <span class="live-footer-acc-title" id="previewFooterCol4Title">LATEST LAUNCHES</span>
+                          <svg class="live-footer-acc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <ul class="live-footer-acc-list" id="previewFooterCol4Links"></ul>
+                      </div>
+                      <!-- Col 5 -->
+                      <div class="live-footer-acc-row" data-col="5">
+                        <button type="button" class="live-footer-acc-btn" data-toggle-col="5">
+                          <span class="live-footer-acc-title" id="previewFooterCol5Title">EMAAR INTERNATIONAL</span>
+                          <svg class="live-footer-acc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <ul class="live-footer-acc-list" id="previewFooterCol5Links"></ul>
+                      </div>
+                      <!-- Col 6 -->
+                      <div class="live-footer-acc-row" data-col="6">
+                        <button type="button" class="live-footer-acc-btn" data-toggle-col="6">
+                          <span class="live-footer-acc-title" id="previewFooterCol6Title">EMAAR HOSPITALITY</span>
+                          <svg class="live-footer-acc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <ul class="live-footer-acc-list" id="previewFooterCol6Links"></ul>
+                      </div>
+                    </div>
+
+
+                    <!-- Bottom Legal Links (Centered, Matching Website Exactly) -->
+                    <div class="live-footer-bottom">
+                      <div class="live-footer-legal" id="previewFooterLegal">
+                        <span class="live-footer-legal-item has-divider">Privacy Policy</span>
+                        <span class="live-footer-legal-item has-divider">Disclaimer</span>
+                        <span class="live-footer-legal-item has-divider">Terms & Conditions</span>
+                        <span class="live-footer-legal-item">Country & Language</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Comprehensive Fields to Edit Footer -->
+                <div>
+                  <!-- Panel 1: Footer Brand Logo & Newsletter Form -->
+                  <div class="footer-editor-card">
+                    <div class="footer-editor-card-title">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                      <span>1. Footer Brand Logo & Newsletter Subscribe Form</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                      <div class="image-replace-box" style="margin-top:0;">
+                        <div class="image-replace-meta">
+                          <img src="/images/emaar-india-logo-en.svg" alt="Footer Logo" class="image-mini-thumb" id="footerLogoThumbImg" style="background:#f1f5f9; object-fit:contain;">
+                          <div class="image-replace-info-col">
+                            <span class="image-replace-label">Footer Brand Logo</span>
+                            <span class="image-current-path" id="footerLogoImgPath">/images/emaar-india-logo-en.svg</span>
+                          </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-xs" id="btnReplaceFooterLogo">Change Logo</button>
+                      </div>
+                      <div class="form-group mb-0">
+                        <label class="form-label" for="editFooterNewsPlaceholder">Newsletter Placeholder</label>
+                        <input type="text" id="editFooterNewsPlaceholder" class="form-input" value="Enter email">
+                      </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 14px;">
+                      <div class="form-group mb-0">
+                        <label class="form-label" for="editFooterNewsBtn">Newsletter Button Label</label>
+                        <input type="text" id="editFooterNewsBtn" class="form-input" value="SUBSCRIBE">
+                      </div>
+                      <div class="form-group mb-0">
+                        <label class="form-label" for="editFooterNewsBtnBg">Button Color (Bg)</label>
+                        <div class="color-input-picker-group">
+                          <input type="color" id="editFooterNewsBtnBg" class="color-picker-swatch" value="#525252" title="Pick button background color">
+                          <input type="text" id="editFooterNewsBtnBgHex" class="form-input color-hex-input" value="#525252" placeholder="#525252" maxlength="7">
+                        </div>
+                      </div>
+                      <div class="form-group mb-0">
+                        <label class="form-label" for="editFooterNewsBtnColor">Button Text Color</label>
+                        <div class="color-input-picker-group">
+                          <input type="color" id="editFooterNewsBtnColor" class="color-picker-swatch" value="#ffffff" title="Pick button text color">
+                          <input type="text" id="editFooterNewsBtnColorHex" class="form-input color-hex-input" value="#ffffff" placeholder="#ffffff" maxlength="7">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Panel 2: Official Social Media Channels & Replaceable SVG Icons -->
+                  <div class="footer-editor-card">
+                    <div class="footer-editor-card-title" style="justify-content: space-between;">
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                        <span>2. Official Social Media Channels & Replaceable SVG Icons</span>
+                      </div>
+                      <button type="button" class="btn btn-outline btn-xs" id="btnAddSocialChannel" style="gap:4px; font-size:11px; padding:3px 10px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        <span>+ Add Social Channel / SVG</span>
+                      </button>
+                    </div>
+
+                    <!-- Dynamic container for social channel cards with editable SVG icons and URLs -->
+                    <div id="socialChannelsList" class="social-channels-grid"></div>
+
+                    <!-- Hidden legacy inputs kept for backward compatibility -->
+                    <input type="hidden" id="editFooterFacebook" value="https://facebook.com/emaarindia">
+                    <input type="hidden" id="editFooterTwitter" value="https://twitter.com/emaarindia">
+                    <input type="hidden" id="editFooterYoutube" value="https://youtube.com/emaarindia">
+                    <input type="hidden" id="editFooterInstagram" value="https://instagram.com/emaarindia">
+                    <input type="hidden" id="editFooterLinkedin" value="https://linkedin.com/company/emaar-india">
+                  </div>
+
+                  <!-- Panel 3: 6 Navigation Columns Accordion Builder (Interactive Chips & Add Link) -->
+                  <div class="footer-editor-card">
+                    <div class="footer-editor-card-title" style="justify-content: space-between;">
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                        <span>3. Footer Navigation Columns (6 Dropdown Drawers & Bullet Tag Chips)</span>
+                      </div>
+                      <span style="font-size: 11px; color: #64748b; font-weight: normal;">Click any column to expand & manage links</span>
+                    </div>
+
+                    <div class="cms-nav-drawers-container">
+                      <!-- Column 1 -->
+                      <div class="cms-nav-col-accordion open" data-nav-col="1">
+                        <button type="button" class="cms-nav-accordion-trigger" data-drawer-col="1">
+                          <div class="cms-nav-trigger-left">
+                            <strong id="accordionCol1TitleLabel">ABOUT EMAAR</strong>
+                          </div>
+                          <svg class="cms-accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <div class="cms-nav-accordion-body" id="navDrawerBody1">
+                          <div class="form-group mb-2">
+                            <label class="form-label" for="editFooterCol1Title">Dropdown Name</label>
+                            <input type="text" id="editFooterCol1Title" class="form-input" value="ABOUT EMAAR">
+                          </div>
+                          <div class="form-group mb-1">
+                            <label class="form-label">Dropdown Items</label>
+                            <div class="cms-dropdown-items-list" id="chipsListCol1"></div>
+                            <button type="button" class="btn-add-dropdown-item" id="btnAddChipCol1">+ Add Item</button>
+                          </div>
+                          <textarea id="editFooterCol1Links" style="display:none;">Who We Are, Leadership, Awards, Emaar Business, Emaar Foundation, Career, Investor Relations, Emaar Blogs, Media, Emaar Sustainability, E-Services, Contact Us, Compliance</textarea>
+                        </div>
+                      </div>
+
+                      <!-- Column 2 -->
+                      <div class="cms-nav-col-accordion" data-nav-col="2">
+                        <button type="button" class="cms-nav-accordion-trigger" data-drawer-col="2">
+                          <div class="cms-nav-trigger-left">
+                            <strong id="accordionCol2TitleLabel">PROJECTS</strong>
+                          </div>
+                          <svg class="cms-accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <div class="cms-nav-accordion-body" id="navDrawerBody2">
+                          <div class="form-group mb-2">
+                            <label class="form-label" for="editFooterCol2Title">Dropdown Name</label>
+                            <input type="text" id="editFooterCol2Title" class="form-input" value="PROJECTS">
+                          </div>
+                          <div class="form-group mb-1">
+                            <label class="form-label">Dropdown Items</label>
+                            <div class="cms-dropdown-items-list" id="chipsListCol2"></div>
+                            <button type="button" class="btn-add-dropdown-item" id="btnAddChipCol2">+ Add Item</button>
+                          </div>
+                          <textarea id="editFooterCol2Links" style="display:none;">Residential, Commercial</textarea>
+                        </div>
+                      </div>
+
+                      <!-- Column 3 -->
+                      <div class="cms-nav-col-accordion" data-nav-col="3">
+                        <button type="button" class="cms-nav-accordion-trigger" data-drawer-col="3">
+                          <div class="cms-nav-trigger-left">
+                            <strong id="accordionCol3TitleLabel">MASTER DEVELOPMENTS</strong>
+                          </div>
+                          <svg class="cms-accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <div class="cms-nav-accordion-body" id="navDrawerBody3">
+                          <div class="form-group mb-2">
+                            <label class="form-label" for="editFooterCol3Title">Dropdown Name</label>
+                            <input type="text" id="editFooterCol3Title" class="form-input" value="MASTER DEVELOPMENTS">
+                          </div>
+                          <div class="form-group mb-1">
+                            <label class="form-label">Dropdown Items</label>
+                            <div class="cms-dropdown-items-list" id="chipsListCol3"></div>
+                            <button type="button" class="btn-add-dropdown-item" id="btnAddChipCol3">+ Add Item</button>
+                          </div>
+                          <textarea id="editFooterCol3Links" style="display:none;">Gomti Greens, Savana by Indore Greens, Savana by Jaipur Greens</textarea>
+                        </div>
+                      </div>
+
+                      <!-- Column 4 -->
+                      <div class="cms-nav-col-accordion" data-nav-col="4">
+                        <button type="button" class="cms-nav-accordion-trigger" data-drawer-col="4">
+                          <div class="cms-nav-trigger-left">
+                            <strong id="accordionCol4TitleLabel">LATEST LAUNCHES</strong>
+                          </div>
+                          <svg class="cms-accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <div class="cms-nav-accordion-body" id="navDrawerBody4">
+                          <div class="form-group mb-2">
+                            <label class="form-label" for="editFooterCol4Title">Dropdown Name</label>
+                            <input type="text" id="editFooterCol4Title" class="form-input" value="LATEST LAUNCHES">
+                          </div>
+                          <div class="form-group mb-1">
+                            <label class="form-label">Dropdown Items</label>
+                            <div class="cms-dropdown-items-list" id="chipsListCol4"></div>
+                            <button type="button" class="btn-add-dropdown-item" id="btnAddChipCol4">+ Add Item</button>
+                          </div>
+                          <textarea id="editFooterCol4Links" style="display:none;">Emaar Serenity Hills, Urban Ascent, Elite Oasis, Emaar India Business Centre, Mohali Hills Residential Plots</textarea>
+                        </div>
+                      </div>
+
+                      <!-- Column 5 -->
+                      <div class="cms-nav-col-accordion" data-nav-col="5">
+                        <button type="button" class="cms-nav-accordion-trigger" data-drawer-col="5">
+                          <div class="cms-nav-trigger-left">
+                            <strong id="accordionCol5TitleLabel">EMAAR INTERNATIONAL</strong>
+                          </div>
+                          <svg class="cms-accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <div class="cms-nav-accordion-body" id="navDrawerBody5">
+                          <div class="form-group mb-2">
+                            <label class="form-label" for="editFooterCol5Title">Dropdown Name</label>
+                            <input type="text" id="editFooterCol5Title" class="form-input" value="EMAAR INTERNATIONAL">
+                          </div>
+                          <div class="form-group mb-1">
+                            <label class="form-label">Dropdown Items</label>
+                            <div class="cms-dropdown-items-list" id="chipsListCol5"></div>
+                            <button type="button" class="btn-add-dropdown-item" id="btnAddChipCol5">+ Add Item</button>
+                          </div>
+                          <textarea id="editFooterCol5Links" style="display:none;">KSA, India, Pakistan, Egypt, Morocco, Turkey</textarea>
+                        </div>
+                      </div>
+
+                      <!-- Column 6 -->
+                      <div class="cms-nav-col-accordion" data-nav-col="6">
+                        <button type="button" class="cms-nav-accordion-trigger" data-drawer-col="6">
+                          <div class="cms-nav-trigger-left">
+                            <strong id="accordionCol6TitleLabel">EMAAR HOSPITALITY</strong>
+                          </div>
+                          <svg class="cms-accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <div class="cms-nav-accordion-body" id="navDrawerBody6">
+                          <div class="form-group mb-2">
+                            <label class="form-label" for="editFooterCol6Title">Dropdown Name</label>
+                            <input type="text" id="editFooterCol6Title" class="form-input" value="EMAAR HOSPITALITY">
+                          </div>
+                          <div class="form-group mb-1">
+                            <label class="form-label">Dropdown Items</label>
+                            <div class="cms-dropdown-items-list" id="chipsListCol6"></div>
+                            <button type="button" class="btn-add-dropdown-item" id="btnAddChipCol6">+ Add Item</button>
+                          </div>
+                          <textarea id="editFooterCol6Links" style="display:none;">Hotels & Resorts, Emaar Hospitality Club, Address Hotels, Vida Residences</textarea>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Panel 4: Legal & Compliance Links -->
+                  <div class="footer-editor-card" style="margin-bottom:0;">
+                    <div class="footer-editor-card-title">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                      <span>4. Bottom Legal & Compliance Disclaimer Links</span>
+                    </div>
+                    <div class="form-group mb-0">
+                      <label class="form-label" for="editFooterLegal">Legal Links (Separated by Bullet • or Comma)</label>
+                      <input type="text" id="editFooterLegal" class="form-input" value="Privacy Policy • Disclaimer • Terms & Conditions • Country & Language">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- DYNAMIC COMPONENT EDITOR FOR INDIVIDUAL / SUB-PAGES -->
+          <div id="customPageComponentsWrapper" style="display: none;">
+            <!-- Header Bar for Active Page -->
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);">
+              <div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                  <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Active Page:</span>
+                  <h3 style="font-size: 17px; font-weight: 800; color: #09090b; margin: 0; line-height: 1.2;" id="customPageEditorTitle">Page Components</h3>
+                  <span class="live-pill" id="customPageEditorStatus">Published</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 12px; color: #64748b;">Destination Route:</span>
+                  <code id="customPageEditorSlug" style="font-size: 11.5px; font-weight: 600; color: #2563eb; background: #eff6ff; padding: 2px 8px; border-radius: 4px; border: 1px solid #dbeafe; font-family: monospace;">/</code>
+                </div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <a href="/preview" target="_blank" class="btn btn-outline btn-sm" id="customPagePreviewBtn" style="font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  <span>Preview Page ↗</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- SECTION 1: HERO BANNER & HEADLINE -->
+            <div class="modular-section-card mb-3">
+              <div class="modular-section-header">
+                <div class="modular-section-title-wrap">
+                  <span class="modular-section-badge">Section 01</span>
+                  <h3 class="modular-section-title">Hero Banner & Visual Headline</h3>
+                </div>
+                <span class="live-pill">Live Component</span>
+              </div>
+              <div class="modular-section-body">
+                <div class="modular-preview-header">
+                  <span class="modular-preview-tag">Hero Visual Preview</span>
+                </div>
+                <div class="modular-preview-box" style="position: relative; overflow: hidden; border-radius: 8px; min-height: 180px; display: flex; align-items: center; justify-content: center; background: #09090b; color: #ffffff; text-align: center; padding: 30px 20px;">
+                  <img id="customPreviewHeroBg" src="/images/landmarks/Serenity-hills-big.webp" alt="Hero Background" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit: cover; opacity: 0.55;">
+                  <div style="position: relative; z-index: 2; max-width: 500px;">
+                    <h2 id="customPreviewHeroTitle" style="font-size: 24px; font-weight: 800; color: #ffffff; text-shadow: 0 2px 10px rgba(0,0,0,0.7); margin-bottom: 6px;">Page Headline</h2>
+                    <p id="customPreviewHeroSubtitle" style="font-size: 13px; color: #e2e8f0; text-shadow: 0 1px 6px rgba(0,0,0,0.7);">Hero Subtitle</p>
+                  </div>
+                </div>
+
+                <div class="form-grid-2 mt-3 mb-3">
+                  <div class="form-group mb-0">
+                    <label class="form-label" for="customEditHeroTitle">Hero Heading *</label>
+                    <input type="text" id="customEditHeroTitle" class="form-input" placeholder="Main banner title">
+                  </div>
+                  <div class="form-group mb-0">
+                    <label class="form-label" for="customEditHeroSubtitle">Hero Subtitle</label>
+                    <input type="text" id="customEditHeroSubtitle" class="form-input" placeholder="Sub-heading caption">
+                  </div>
+                </div>
+
+                <div class="image-replace-box" style="margin-top: 10px;">
+                  <div class="image-replace-meta">
+                    <img src="/images/landmarks/Serenity-hills-big.webp" alt="Hero Media" class="image-mini-thumb" id="customEditHeroBannerThumb" style="width: 48px; height: 34px; object-fit: cover; border-radius: 4px;">
+                    <div class="image-replace-info-col">
+                      <span class="image-replace-label">Hero Background Visual (Image / Video)</span>
+                      <span class="image-current-path" id="customEditHeroBannerPath">/images/landmarks/Serenity-hills-big.webp</span>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-xs" id="btnReplaceCustomHeroBanner">Replace Media</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 2: EDITORIAL NARRATIVE & STORY -->
+            <div class="modular-section-card mb-3">
+              <div class="modular-section-header">
+                <div class="modular-section-title-wrap">
+                  <span class="modular-section-badge">Section 02</span>
+                  <h3 class="modular-section-title">Page Overview & Editorial Narrative</h3>
+                </div>
+                <span class="live-pill">Editorial Content</span>
+              </div>
+              <div class="modular-section-body">
+                <div class="form-group mb-0">
+                  <label class="form-label" for="customEditBodyContent">Editorial Body Content / Overview Description</label>
+                  <textarea id="customEditBodyContent" class="form-textarea" rows="4" placeholder="Detailed property overview, location highlights, and architectural narrative..." style="min-height: 90px;"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 3: ACTIVE PAGE LAYOUT SECTIONS -->
+            <div class="modular-section-card mb-3">
+              <div class="modular-section-header">
+                <div class="modular-section-title-wrap">
+                  <span class="modular-section-badge">Section 03</span>
+                  <h3 class="modular-section-title">Page Layout Modules & Blocks</h3>
+                </div>
+                <span class="live-pill">Component Blocks</span>
+              </div>
+              <div class="modular-section-body">
+                <p style="font-size: 11.5px; color: #64748b; margin-bottom: 10px;">Toggle which components appear on this specific page:</p>
+                <div class="page-sections-grid" id="customPageSectionsGrid">
+                  <label class="page-section-chip">
+                    <input type="checkbox" name="customPageSection" value="hero" checked>
+                    <span>Hero Banner & Media</span>
+                  </label>
+                  <label class="page-section-chip">
+                    <input type="checkbox" name="customPageSection" value="overview" checked>
+                    <span>Overview Narrative</span>
+                  </label>
+                  <label class="page-section-chip">
+                    <input type="checkbox" name="customPageSection" value="projects" checked>
+                    <span>Developments Slider</span>
+                  </label>
+                  <label class="page-section-chip">
+                    <input type="checkbox" name="customPageSection" value="amenities" checked>
+                    <span>Amenities & Features</span>
+                  </label>
+                  <label class="page-section-chip">
+                    <input type="checkbox" name="customPageSection" value="gallery">
+                    <span>Media Gallery</span>
+                  </label>
+                  <label class="page-section-chip">
+                    <input type="checkbox" name="customPageSection" value="cta" checked>
+                    <span>Enquiry & Site Visit CTA</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+          <!-- SUBPANE 2: IMAGES & LANDMARKS -->
+          <div class="content-subpane" id="subpane-images">
+            <div class="view-header">
+              <div>
+                <h2 class="view-title">Website Images & Landmarks</h2>
+                <p class="view-sub">Manage featured development photographs and master listings.</p>
+              </div>
+              <button type="button" class="btn btn-primary" id="btnOpenAddImgModal">+ Add Development</button>
+            </div>
+            <div class="landmarks-grid" id="dashboardLandmarksGrid">
+              <!-- Populated via JS with natural full-shape image containers -->
+            </div>
+          </div>
+
+          <!-- SUBPANE 3: VIDEOS -->
+          <div class="content-subpane" id="subpane-videos">
+            <div class="view-header">
+              <div>
+                <h2 class="view-title">Hero Background Video</h2>
+                <p class="view-sub">Playing natively in high resolution edge-to-edge frame.</p>
+              </div>
+              <div class="view-header-actions">
+                <button type="button" class="btn btn-primary" id="btnOpenHeroVideoPicker" style="display: inline-flex; align-items: center; gap: 6px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline></svg>
+                  <span>Replace Hero Video</span>
+                </button>
+                <button type="button" class="btn btn-outline" id="btnResetVideoFull">Reset to Original</button>
+              </div>
+            </div>
+
+            <!-- Video Player (Clean Alone Without Spec Bar / Letterbox Padding) -->
+            <div class="full-res-video-container">
+              <video id="fullResHeroVideo" controls autoplay muted loop playsinline class="full-res-video">
+                <source src="/videos/emaar.mp4" type="video/mp4" id="fullResVideoSource">
+              </video>
+            </div>
+
+            <div class="card mt-4 p-4">
+              <label class="form-label">Video Direct URL / Local Path</label>
+              <div class="input-with-button">
+                <input type="text" id="fullResVideoUrlInput" class="form-input" value="/videos/emaar.mp4">
+                <button type="button" class="btn btn-dark" id="btnApplyFullResUrl">Apply Video Path</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 6: PAGES -->
+        <!-- ========================================== -->
+        <div class="view-pane" id="pane-pages">
+          <div class="view-header">
+            <div>
+              <h2 class="view-title">Pages Manager</h2>
+              <p class="view-sub">Create and organize website pages.</p>
+            </div>
+            <button type="button" class="btn btn-primary" id="btnOpenPageModal">+ Create Page</button>
+          </div>
+
+          <div class="card">
+            <table class="cms-table">
+              <thead>
+                <tr>
+                  <th>Page Title</th>
+                  <th>Route Slug</th>
+                  <th>Template</th>
+                  <th>Status</th>
+                  <th class="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="dashboardPagesTable">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 7: SETTINGS -->
+        <!-- ========================================== -->
+        <div class="view-pane" id="pane-settings">
+          <div class="view-header">
+            <div>
+              <h2 class="view-title">Settings & Brand Identity</h2>
+              <p class="view-sub">Manage company contact info, site title, search directives, and brand logo.</p>
+            </div>
+            <button type="button" class="btn btn-primary" id="btnSaveBrandSettings" style="display: inline-flex; align-items: center; gap: 6px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Save Settings</span>
+            </button>
+          </div>
+
+          <div class="form-grid-2" style="margin-bottom: 20px;">
+            <!-- Brand & Search Details -->
+            <div class="card p-4">
+              <h3 class="form-section-title">Brand Identity</h3>
+              <div class="form-group">
+                <label class="form-label" for="settingsBrandTitle">Brand / Website Title</label>
+                <input type="text" id="settingsBrandTitle" class="form-input" placeholder="e.g. Emaar India Limited">
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="settingsSearchPlaceholder">Hero Search Placeholder</label>
+                <input type="text" id="settingsSearchPlaceholder" class="form-input" placeholder="Search by project, location or property type...">
+              </div>
+            </div>
+
+            <!-- Contact Information -->
+            <div class="card p-4">
+              <h3 class="form-section-title">Company Contact Info</h3>
+              <div class="form-group">
+                <label class="form-label" for="settingsContactPhone">Contact Phone Number</label>
+                <input type="text" id="settingsContactPhone" class="form-input" placeholder="e.g. +91 124 4421155">
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="settingsContactEmail">Contact Email Address</label>
+                <input type="email" id="settingsContactEmail" class="form-input" placeholder="e.g. enquiries@emaar-india.com">
+              </div>
+            </div>
+          </div>
+
+          <div class="card p-4">
+            <h3 class="form-section-title">Brand Logo</h3>
+            <p style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 12px;">This official logo appears in the top navigation bar and footer across the entire website.</p>
+            <div class="logo-preview-box">
+              <img src="/media/images/emaar-india-logo-en.svg" alt="Brand Logo" id="settingsLogoPreview">
+            </div>
+            <div class="mt-3">
+              <button type="button" class="btn btn-outline" id="btnSettingsLogoPicker">
+                Replace Logo (SVG/PNG)
+              </button>
+            </div>
+          </div>
+
+          <!-- Version History & Safe Rollback -->
+          <div class="card p-4" style="margin-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 12px; flex-wrap: wrap;">
+              <div>
+                <h3 class="form-section-title" style="display: flex; align-items: center; gap: 8px;">
+                  <span>Release Versioning & Safe Rollback</span>
+                  <span class="live-pill" style="font-size: 10px;">Safe Snapshots</span>
+                </h3>
+                <p style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 0;">
+                  Every time changes are published, an immutable snapshot is preserved. If something wrong was published, safely rollback here to immediately restore an older safe version to the live website.
+                </p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnRefreshVersions" title="Refresh release history">
+                ↻ Refresh History
+              </button>
+            </div>
+
+            <div class="table-container" style="border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: #ffffff;">
+              <table class="data-table" style="margin-bottom: 0;">
+                <thead>
+                  <tr>
+                    <th>Version</th>
+                    <th>Release Time</th>
+                    <th>Published By</th>
+                    <th>Snapshot Contents</th>
+                    <th class="text-right">Live Status / Action</th>
+                  </tr>
+                </thead>
+                <tbody id="settingsVersionsTable">
+                  <!-- Populated dynamically via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL: VERSION CHANGES & COMMIT HISTORY (DIFF) -->
+  <div class="modal-backdrop" id="modalVersionDiff">
+    <div class="modal-card" style="max-width: 680px; width: 95%;">
+      <div class="modal-header" style="border-bottom: 1px solid var(--border); padding: 14px 20px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 700;">Release Changes & Commit Diff</h3>
+            <span id="diffModalVersionBadge" style="background: #0f172a; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">v2.0</span>
+            <span id="diffModalLiveBadge" style="display:none; background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;">● CURRENT LIVE</span>
+          </div>
+          <p id="diffModalSubtitle" style="font-size: 12px; color: var(--text-muted); margin: 4px 0 0 0;"></p>
+        </div>
+        <button type="button" class="modal-close" id="btnCloseDiffModal">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 16px 20px; max-height: 60vh; overflow-y: auto;" id="diffModalBody">
+        <!-- Changes list rendered here -->
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-top: 1px solid var(--border); background: #f8fafc;">
+        <button type="button" class="btn btn-secondary btn-sm" id="btnCloseDiffModalBtn">Close</button>
+        <button type="button" class="btn btn-outline btn-sm" id="btnRollbackFromDiffModal" style="color:#ef4444; border-color:#fca5a5; font-weight:600;">
+          ↺ Rollback to this Safe Snapshot
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD PAGE -->
+  <div class="modal-backdrop" id="modalAddPage">
+    <div class="modal-card" style="max-width: 520px; width: 92%;">
+      <div class="modal-header">
+        <h3>Create New Page</h3>
+        <button type="button" class="modal-close" id="btnClosePageModal">&times;</button>
+      </div>
+      <form id="formAddPage">
+        <div class="modal-body" style="padding: 14px 18px;">
+          <div class="form-group mb-2">
+            <label class="form-label" for="newPageTitle" style="font-size: 11px; margin-bottom: 2px;">Page Title *</label>
+            <input type="text" id="newPageTitle" class="form-input" placeholder="e.g. Imperial Gardens" required style="height: 34px; font-size: 12.5px;">
+          </div>
+          <div class="form-grid-2 mb-2">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="newPageSlug" style="font-size: 11px; margin-bottom: 2px;">URL Slug *</label>
+              <input type="text" id="newPageSlug" class="form-input" placeholder="/test" required style="height: 34px; font-size: 12.5px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="newPageStatus" style="font-size: 11px; margin-bottom: 2px;">Status</label>
+              <select id="newPageStatus" class="form-select" style="height: 34px; font-size: 12.5px;">
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label" for="newPageTemplate" style="font-size: 11px; margin-bottom: 2px;">Page Template</label>
+            <select id="newPageTemplate" class="form-select" style="height: 34px; font-size: 12.5px; font-weight: 600;">
+              <option value="blank" selected>Empty Blank Canvas (Build with Grids & Blocks)</option>
+              <option value="standard">Standard Hero Banner & Story</option>
+            </select>
+          </div>
+          <div class="form-group mb-2" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px;">
+            <span style="font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 6px; display: block;">Global Shell Checklist</span>
+            <div style="display: flex; gap: 16px;">
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: #1e293b;">
+                <input type="checkbox" id="newPageIncludeNavbar" checked style="accent-color: #2563eb;">
+                <span>Same Global Navbar (Header)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: #1e293b;">
+                <input type="checkbox" id="newPageIncludeFooter" checked style="accent-color: #2563eb;">
+                <span>Same Global Footer</span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label" for="newPageHeroTitle" style="font-size: 11px; margin-bottom: 2px;">Hero Heading</label>
+            <input type="text" id="newPageHeroTitle" class="form-input" placeholder="Main banner title" style="height: 34px; font-size: 12.5px;">
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label" for="newPageHeroSubtitle" style="font-size: 11px; margin-bottom: 2px;">Hero Subtitle</label>
+            <input type="text" id="newPageHeroSubtitle" class="form-input" placeholder="Sub-heading caption" style="height: 34px; font-size: 12.5px;">
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label" for="newPageContent" style="font-size: 11px; margin-bottom: 2px;">Body Content / Summary</label>
+            <textarea id="newPageContent" class="form-textarea" rows="2" placeholder="Page summary and editorial narrative..." style="min-height: 48px; font-size: 12.5px;"></textarea>
+          </div>
+          <div class="page-sections-selector mb-1">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong style="font-size: 11.5px; color: #0f172a;">Page Sections to Include</strong>
+              <span style="font-size: 10.5px; color: #64748b;">Choose layout modules</span>
+            </div>
+            <div class="page-sections-grid">
+              <label class="page-section-chip">
+                <input type="checkbox" name="newPageSection" value="hero" checked>
+                <span>Hero Banner</span>
+              </label>
+              <label class="page-section-chip">
+                <input type="checkbox" name="newPageSection" value="overview" checked>
+                <span>Overview Story</span>
+              </label>
+              <label class="page-section-chip">
+                <input type="checkbox" name="newPageSection" value="projects" checked>
+                <span>Developments Slider</span>
+              </label>
+              <label class="page-section-chip">
+                <input type="checkbox" name="newPageSection" value="amenities" checked>
+                <span>Amenities & Features</span>
+              </label>
+              <label class="page-section-chip">
+                <input type="checkbox" name="newPageSection" value="gallery">
+                <span>Media Gallery</span>
+              </label>
+              <label class="page-section-chip">
+                <input type="checkbox" name="newPageSection" value="cta" checked>
+                <span>Enquiry & Site Visit</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 12px 18px; display: flex; justify-content: flex-end; gap: 8px; background: #fafafa; border-top: 1px solid #f1f5f9;">
+          <button type="button" class="btn btn-secondary btn-xs" id="btnCancelPageModal" style="padding: 6px 12px;">Cancel</button>
+          <button type="submit" class="btn btn-dark btn-xs" style="padding: 6px 14px; font-weight: 600;">Create Page</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: VIEW & EDIT PAGE (With Single Page Direct Publish) -->
+  <div class="modal-backdrop" id="modalEditPage">
+    <div class="modal-card" style="max-width: 520px; width: 92%; box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.3);">
+      <div class="modal-header" style="padding: 12px 18px;">
+        <div>
+          <h3 id="modalEditPageHeading" style="font-size: 14.5px; font-weight: 800; line-height: 1.2;">View & Edit Page</h3>
+          <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;" id="modalEditPageSlugSub">/</span>
+        </div>
+        <button type="button" class="modal-close" id="btnCloseEditPageModal">&times;</button>
+      </div>
+      <form id="formEditPage">
+        <input type="hidden" id="editPageId">
+        <div class="modal-body" style="padding: 14px 18px;">
+          <div class="form-group mb-2">
+            <label class="form-label" for="editPageTitle" style="font-size: 11px; margin-bottom: 2px;">Page Title *</label>
+            <input type="text" id="editPageTitle" class="form-input" required style="height: 34px; font-size: 12.5px;">
+          </div>
+          <div class="form-grid-2 mb-2">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="editPageSlug" style="font-size: 11px; margin-bottom: 2px;">Route Slug *</label>
+              <input type="text" id="editPageSlug" class="form-input" required style="height: 34px; font-size: 12.5px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="editPageStatus" style="font-size: 11px; margin-bottom: 2px;">Status</label>
+              <select id="editPageStatus" class="form-select" style="height: 34px; font-size: 12.5px;">
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label" for="editPageHeroTitle" style="font-size: 11px; margin-bottom: 2px;">Hero Heading</label>
+            <input type="text" id="editPageHeroTitle" class="form-input" placeholder="Main banner title" style="height: 34px; font-size: 12.5px;">
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label" for="editPageHeroSubtitle" style="font-size: 11px; margin-bottom: 2px;">Hero Subtitle</label>
+            <input type="text" id="editPageHeroSubtitle" class="form-input" placeholder="Sub-heading caption" style="height: 34px; font-size: 12.5px;">
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label" for="editPageContent" style="font-size: 11px; margin-bottom: 2px;">Body Content / Description</label>
+            <textarea id="editPageContent" class="form-textarea" rows="2" placeholder="Page summary..." style="min-height: 48px; font-size: 12.5px;"></textarea>
+          </div>
+          <div class="page-sections-selector" style="margin-top: 10px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <strong style="font-size: 11.5px; color: #0f172a;">Active Page Sections</strong>
+              <span style="font-size: 10.5px; color: #64748b;">Enabled modules</span>
+            </div>
+            <div class="page-sections-grid" id="editPageSectionsGrid">
+              <label class="page-section-chip">
+                <input type="checkbox" name="editPageSection" value="hero" checked>
+                <span>Hero Banner</span>
+              </label>
+              <label class="page-section-chip">
+                <input type="checkbox" name="editPageSection" value="overview" checked>
+                <span>Overview Story</span>
+              </label>
+              <label class="page-section-chip">
+                <input type="checkbox" name="editPageSection" value="projects" checked>
+                <span>Developments Slider</span>
+              </label>
+              <label class="page-section-chip">
+                <input type="checkbox" name="editPageSection" value="amenities" checked>
+                <span>Amenities & Features</span>
+              </label>
+              <label class="page-section-chip">
+                <input type="checkbox" name="editPageSection" value="gallery">
+                <span>Media Gallery</span>
+              </label>
+              <label class="page-section-chip">
+                <input type="checkbox" name="editPageSection" value="cta" checked>
+                <span>Enquiry & Site Visit</span>
+              </label>
+            </div>
+          </div>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-top: 14px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="width: 34px; height: 34px; border-radius: 6px; background: #e0e7ff; color: #4338ca; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+              </div>
+              <div>
+                <strong style="font-size: 12px; color: #0f172a; display: block; margin-bottom: 2px;">Page Components & Sections</strong>
+                <span style="font-size: 11px; color: #64748b; display: block; line-height: 1.3;">Configure live editorial blocks, walkthroughs, and blogs</span>
+              </div>
+            </div>
+            <button type="button" class="btn btn-dark btn-xs" id="btnEditPageComponentsBody" style="white-space: nowrap; flex-shrink: 0; font-weight: 600; padding: 7px 12px; display: inline-flex; align-items: center; gap: 5px;">
+              <span>Edit Components</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; background: #fafafa; border-top: 1px solid #f1f5f9;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <a href="/preview" target="_blank" class="btn btn-outline btn-xs" id="btnPreviewCurrentPage" style="display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; font-weight: 600;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              <span>Preview Staged</span>
+            </a>
+            <button type="button" class="btn btn-danger btn-xs" id="btnDeleteCurrentPage" style="display: none; padding: 6px 11px; font-weight: 600;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              <span>Delete Page</span>
+            </button>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button type="button" class="btn btn-secondary btn-xs" id="btnCancelEditPageModal" style="padding: 6px 12px;">Cancel</button>
+            <button type="submit" class="btn btn-outline btn-xs" id="btnSavePageDraft" style="padding: 6px 12px; font-weight: 600;">Save Changes</button>
+            <button type="button" class="btn btn-dark btn-xs" id="btnPublishSinglePage" style="padding: 6px 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Publish Page</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: MEDIA LIBRARY PICKER -->
+  <div class="modal-backdrop" id="modalMediaPicker">
+    <div class="modal-card" style="max-width: 720px; width: 95%;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div>
+            <h3 style="font-size: 15px; font-weight: 800; color: #09090b;" id="pickerModalHeading">Media Library</h3>
+            <span style="font-size: 11px; color: var(--text-muted);" id="pickerContextSub">Choose an existing media item or upload from your local device</span>
+          </div>
+          <span class="picker-storage-pill" id="pickerStorageBadge">7.09 MB / 100 MB Used</span>
+        </div>
+        <button type="button" class="modal-close" id="btnCloseMediaPicker">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 16px 20px;">
+        <div class="picker-top-bar">
+          <div class="picker-search-wrap">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="pickerSearchInput" placeholder="Search media by name..." class="picker-search-input">
+          </div>
+          <div class="picker-tabs">
+            <button type="button" class="picker-tab active" data-picker-filter="all">All Files</button>
+            <button type="button" class="picker-tab" data-picker-filter="image">Images</button>
+            <button type="button" class="picker-tab" data-picker-filter="video">Videos</button>
+            <button type="button" class="picker-tab" data-picker-filter="upload">Upload</button>
+          </div>
+          <label class="btn btn-primary btn-sm picker-upload-btn" id="pickerUploadLocalBtn" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-weight: 700; font-size: 12px; white-space: nowrap;">
+            <input type="file" id="pickerDirectFileInput" accept="image/*,video/*" hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <span>Upload from Local</span>
+          </label>
+        </div>
+
+        <div class="picker-image-grid" id="pickerImageGrid">
+          <!-- Dynamically populated via JS -->
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <div id="pickerSelectedInfo" style="font-size: 11.5px; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 380px;">
+          Click a media item above or click &ldquo;Upload from Local&rdquo; to add a file
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary" id="btnCancelMediaPicker">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btnApplyMediaPicker" disabled>Apply Selected Media</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: MEDIA PREVIEW LIGHTBOX -->
+  <div class="modal-backdrop" id="modalMediaLightbox">
+    <div class="modal-card" style="max-width: 720px; width: 92%; padding: 0; overflow: hidden; background: #ffffff; color: #09090b; border: 1px solid #e2e8f0; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid #f1f5f9; background: #ffffff;">
+        <span style="font-size: 13.5px; font-weight: 700; color: #09090b; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 500px;" id="lightboxMediaTitle">Media Preview</span>
+        <button type="button" class="modal-close" id="btnCloseMediaLightbox" style="color: #64748b; font-size: 22px; line-height: 1; cursor: pointer;">&times;</button>
+      </div>
+      <div style="display: flex; justify-content: center; align-items: center; background: #f8fafc; min-height: 320px; max-height: 500px; overflow: hidden; padding: 16px; border-bottom: 1px solid #f1f5f9;" id="lightboxMediaContent">
+        <!-- Rendered dynamically -->
+      </div>
+      <div style="padding: 12px 20px; background: #ffffff; display: flex; justify-content: center; align-items: center;">
+        <div style="font-size: 12px; color: #64748b; font-weight: 500;" id="lightboxMediaMeta">Asset Details</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

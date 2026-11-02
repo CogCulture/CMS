@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emaar India - Staged Website Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #09090b;
+      color: #fafafa;
+    }
+
+    /* =========================================================
+       EXECUTIVE STAGING CONTROL BAR
+       ========================================================= */
+    .staging-topbar {
+      height: 46px;
+      background: #09090b;
+      border-bottom: 1px solid #27272a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 1000;
+      position: relative;
+    }
+
+    .staging-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .staging-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #18181b;
+      border: 1px solid #27272a;
+      color: #10b981;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 11px;
+      border-radius: 9999px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .staging-pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse-green 2s infinite;
+    }
+
+    @keyframes pulse-green {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* Right Action Group */
+    .staging-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-topbar {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 5px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+      border: none;
+    }
+
+    .btn-refresh {
+      background: #18181b;
+      color: #fafafa;
+      border: 1px solid #27272a;
+      padding: 6px 11px;
+    }
+    .btn-refresh:hover {
+      background: #27272a;
+    }
+
+    .btn-return {
+      background: #18181b;
+      color: #fafafa;
+      border: 1px solid #27272a;
+    }
+    .btn-return:hover {
+      background: #27272a;
+    }
+
+    .btn-live-view {
+      background: #18181b;
+      color: #fafafa;
+      border: 1px solid #27272a;
+    }
+    .btn-live-view:hover {
+      background: #27272a;
+    }
+
+    .btn-publish-now {
+      background: #10b981;
+      color: #ffffff;
+    }
+    .btn-publish-now:hover {
+      background: #059669;
+    }
+
+    /* =========================================================
+       PREVIEW STAGE CONTAINER (DESKTOP FULL WIDTH ONLY)
+       ========================================================= */
+    .preview-viewport-shell {
+      height: calc(100vh - 46px);
+      width: 100%;
+      background: #ffffff;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .iframe-wrapper {
+      height: 100%;
+      width: 100%;
+      background: #ffffff;
+    }
+
+    .native-site-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+      background: #ffffff;
+    }
+
+    /* Toast Notification */
+    .staging-toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #18181b;
+      color: #fafafa;
+      border: 1px solid #27272a;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      z-index: 9999;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .staging-toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .staging-toast.success svg {
+      color: #10b981;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Executive Staging Bar -->
+  <header class="staging-topbar">
+    <div class="staging-left">
+      <div class="staging-badge" style="background: #27272a; color: #38bdf8; border-color: #3f3f46;" id="previewRouteBadge">
+        Page: /
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="staging-actions">
+      <button type="button" class="btn-topbar btn-refresh" id="btnRefreshFrame" title="Reload Staged Preview">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+        <span>Refresh</span>
+      </button>
+
+      <a href="http://localhost:3000/" target="_blank" class="btn-topbar btn-live-view">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+        <span>View Live Website</span>
+      </a>
+
+      <button type="button" class="btn-topbar btn-publish-now" id="btnPublishStaged">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span>Publish to Live</span>
+      </button>
+
+      <a href="/" class="btn-topbar btn-return">
+        <span>Back to CMS</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Real Native Website Rendering Shell (Desktop View) -->
+  <main class="preview-viewport-shell" id="previewShell">
+    <div class="iframe-wrapper">
+      <iframe
+        id="nativeSiteIframe"
+        class="native-site-frame"
+        src="http://localhost:3000/?preview=true"
+        title="Emaar India Native Website Preview"
+      ></iframe>
+    </div>
+  </main>
+
+  <!-- Toast Notification -->
+  <div class="staging-toast" id="stagingToast">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    <span id="stagingToastMsg">Published successfully</span>
+  </div>
+
+  <script>
+    function getPreviewTargetRoute() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('page')) {
+        let p = params.get('page');
+        return p.startsWith('/') ? p : '/' + p;
+      }
+      const path = window.location.pathname || '';
+      if (path.startsWith('/preview/')) {
+        const sub = path.replace(/^\/preview/, '');
+        return sub.startsWith('/') ? sub : '/' + sub;
+      }
+      return '/';
+    }
+
+    const currentRoute = getPreviewTargetRoute();
+    const iframe = document.getElementById('nativeSiteIframe');
+    let lastKnownStagedTs = 0;
+
+    function buildIframeUrl(addTs = false) {
+      const route = getPreviewTargetRoute();
+      const sep = route.includes('?') ? '&' : '?';
+      let url = `http://localhost:3000${route === '/' ? '/' : route}${sep}preview=true`;
+      if (addTs) url += `&_ts=${Date.now()}`;
+      return url;
+    }
+
+    if (iframe) {
+      iframe.src = buildIframeUrl(false);
+    }
+
+    const liveBtn = document.querySelector('.btn-live-view');
+    if (liveBtn) {
+      liveBtn.href = 'http://localhost:3000' + (currentRoute === '/' ? '/' : currentRoute);
+    }
+
+    const routeBadge = document.getElementById('previewRouteBadge');
+    if (routeBadge) {
+      routeBadge.textContent = 'Page: ' + (currentRoute === '/' ? '/ (Home)' : currentRoute);
+    }
+
+    function dynamicSyncPreview(reason = 'Staged changes synced dynamically') {
+      iframe.src = buildIframeUrl(true);
+      showToast(reason);
+    }
+
+    // 1. Instant Cross-Tab Broadcast Channel Sync
+    try {
+      const cmsChannel = new BroadcastChannel('cms_live_sync');
+      cmsChannel.onmessage = (e) => {
+        if (e.data && e.data.type === 'STAGED_CHANGE') {
+          dynamicSyncPreview('Instant CMS update applied dynamically');
+        }
+      };
+    } catch (e) {}
+
+    // 2. Background Polling on /api/staged-status (Detects changes from any tab or API call)
+    async function checkStagedStatus() {
+      try {
+        const res = await fetch('/api/staged-status');
+        const data = await res.json();
+        if (data.success && data.staged_updated_at) {
+          if (lastKnownStagedTs > 0 && data.staged_updated_at > lastKnownStagedTs) {
+            dynamicSyncPreview('Staged changes detected & synced dynamically');
+          }
+          lastKnownStagedTs = data.staged_updated_at;
+        }
+      } catch (e) {}
+    }
+
+    // Initialize baseline and poll every 1200ms
+    checkStagedStatus();
+    setInterval(checkStagedStatus, 1200);
+
+    // Manual Refresh Frame (Still available as quick fallback)
+    document.getElementById('btnRefreshFrame').addEventListener('click', () => {
+      dynamicSyncPreview('Preview refreshed with latest staged changes');
+    });
+
+    // Publish to Live
+    document.getElementById('btnPublishStaged').addEventListener('click', async () => {
+      const btn = document.getElementById('btnPublishStaged');
+      btn.disabled = true;
+      btn.style.opacity = '0.7';
+
+      try {
+        const res = await fetch('/api/publish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('All staged changes published to live website!');
+          iframe.src = 'http://localhost:3000/?preview=true&_ts=' + Date.now();
+        } else {
+          showToast(data.message || 'Error publishing changes');
+        }
+      } catch (err) {
+        showToast('Publish failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      }
+    });
+
+    // Toast Helper
+    function showToast(msg) {
+      const toast = document.getElementById('stagingToast');
+      const toastMsg = document.getElementById('stagingToastMsg');
+      toastMsg.textContent = msg;
+      toast.classList.add('show', 'success');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3500);
+    }
+  </script>
+</body>
+</html>

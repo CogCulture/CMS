@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emaar India - Live Visual Website Editor</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #09090b;
+    }
+    .native-editor-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+      background: #ffffff;
+    }
+  </style>
+</head>
+<body>
+  <iframe
+    id="nativeEditorIframe"
+    class="native-editor-frame"
+    src="http://localhost:3000/?preview=true&editor=true"
+    title="Emaar India Native Visual Website Editor"
+  ></iframe>
+</body>
+</html>
