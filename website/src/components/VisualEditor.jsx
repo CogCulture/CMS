@@ -1,30 +1,236 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { usePathname } from "next/navigation";
+
+const FONT_OPTIONS = [
+  { value: "Optima, Cinzel, serif", label: "Optima (Luxury Serif)" },
+  { value: "Cinzel, serif", label: "Cinzel (Display)" },
+  { value: "Lato, sans-serif", label: "Lato (Sans-Serif)" },
+  { value: "'Plus Jakarta Sans', sans-serif", label: "Plus Jakarta Sans" },
+  { value: "'Playfair Display', Georgia, serif", label: "Playfair Display" },
+  { value: "system-ui, sans-serif", label: "System Sans" }
+];
+
+const FONT_SIZES = [10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 32, 36, 40, 48, 56, 64];
 
 export default function VisualEditor() {
-  const [isActive, setIsActive] = useState(false);
-  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, opensLeft: false });
+  const pathname = usePathname();
+  const isEditorPath = (p) => {
+    if (!p) return false;
+    return p === "/editor" || p.startsWith("/editor") || p.endsWith("/editor") || p.includes("/editor/") || p.includes("/editor");
+  };
+  const [isActive, setIsActive] = useState(isEditorPath(pathname));
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
   const [selectedLayer, setSelectedLayer] = useState(null);
   
   // Modals
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropModalTab, setCropModalTab] = useState("main"); // "main" | "reframe" | "replace"
+  const [cropImgSrc, setCropImgSrc] = useState("");
+  const [cropPreviewMode, setCropPreviewMode] = useState("contain"); // "contain" | "16/9" | "4/3" | "1/1"
   const [codeModalOpen, setCodeModalOpen] = useState(false);
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
+  const [videoModalTab, setVideoModalTab] = useState("main"); // "main" | "reframe" | "replace"
+  const [videoReplaceCategory, setVideoReplaceCategory] = useState("all"); // "all" | "videos" | "images"
+  const [videoTargetEl, setVideoTargetEl] = useState(null);
+  const [videoState, setVideoState] = useState({
+    src: "",
+    fit: "cover",
+    scale: 100,
+    posX: 50,
+    posY: 50,
+    speed: 1,
+    loop: true,
+    autoplay: true,
+    muted: true
+  });
+
+  const [videoPreviewMode, setVideoPreviewMode] = useState("16/9"); // "16/9" | "hero" | "contain"
+  const [videoMeta, setVideoMeta] = useState({ width: null, height: null, duration: null });
+  const previewVideoRef = useRef(null);
+
+  // Button live action execution & modal safety
+  const isExecutingLiveActionRef = useRef(false);
+  const lastExecutedActionTimeRef = useRef(0);
+
+  const isWebsiteModalOpen = () => {
+    if (typeof document === "undefined") return false;
+    // EnquiryModal is only mounted into the DOM when open:
+    const enquireModal = document.querySelector('[data-testid="enquire-modal"], [data-testid="enquire-modal-scrim"]');
+    if (enquireModal) return true;
+
+    // Mobile dock more sheet is only open when data-open="true"
+    const mobileSheet = document.querySelector('[data-testid="mobile-more-sheet"][data-open="true"]');
+    if (mobileSheet) return true;
+
+    // Check for any visible dialog (excluding hidden/collapsed sheets like MobileDock's default state)
+    const activeDialog = document.querySelector('[role="dialog"]:not([aria-hidden="true"])');
+    if (activeDialog && !activeDialog.closest(".visual-editor-portal, #visualEditorStudioBar")) {
+      const rect = activeDialog.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0 && window.getComputedStyle(activeDialog).visibility !== "hidden" && window.getComputedStyle(activeDialog).display !== "none") {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const executeLiveElementAction = (el) => {
+    if (!el) return;
+    const now = Date.now();
+    if (now - lastExecutedActionTimeRef.current < 350) return;
+    lastExecutedActionTimeRef.current = now;
+
+    // Immediately clear and hide editor highlight container and toolbars so nothing is left in the air
+    setActiveBoxInfo(null);
+    setTextPillBar((prev) => ({ ...prev, visible: false }));
+    exitTextEditing();
+    activeTextRef.current = null;
+    setSelectedShapeId(null);
+    setMultiSelectedElements([]);
+
+    // Check if element or its ancestor is a link or has href to navigate in editor mode
+    const anchor = el.tagName === "A" ? el : el.closest("a");
+    const rawHref = anchor?.getAttribute("href") || anchor?.dataset?.cmsOrigHref || el.dataset?.href;
+
+    if (rawHref && !rawHref.startsWith("#") && !rawHref.startsWith("mailto:") && !rawHref.startsWith("tel:") && !rawHref.startsWith("javascript:")) {
+      let targetPath = rawHref;
+      try {
+        if (targetPath.startsWith("http://") || targetPath.startsWith("https://")) {
+          const urlObj = new URL(targetPath);
+          if (urlObj.origin === window.location.origin) {
+            targetPath = urlObj.pathname + urlObj.search + urlObj.hash;
+          } else {
+            window.open(targetPath, "_blank");
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // Keep user in editor mode on destination page
+      const [pathOnly, queryOrHash] = targetPath.split(/[?#]/);
+      const suffix = targetPath.slice(pathOnly.length);
+      let editorPath = pathOnly;
+      if (!editorPath.includes("/editor")) {
+        if (editorPath === "" || editorPath === "/") {
+          editorPath = "/editor";
+        } else if (editorPath.endsWith("/")) {
+          editorPath = `${editorPath}editor`;
+        } else {
+          editorPath = `${editorPath}/editor`;
+        }
+      }
+      window.location.href = `${editorPath}${suffix}`;
+      return;
+    }
+
+    isExecutingLiveActionRef.current = true;
+    try {
+      if (typeof el.click === "function") {
+        el.click();
+      } else {
+        const clickEvt = new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          detail: 1
+        });
+        el.dispatchEvent(clickEvt);
+      }
+    } catch (err) {
+      console.warn("Live action execution failed:", err);
+    } finally {
+      setTimeout(() => {
+        isExecutingLiveActionRef.current = false;
+      }, 100);
+    }
+  };
+
+  // When in editor mode, ensure any router or link navigation automatically stays in editor mode
+  useEffect(() => {
+    if (!isActive) return;
+    const origPushState = window.history.pushState;
+    const origReplaceState = window.history.replaceState;
+
+    const toEditorUrl = (url) => {
+      if (!url || typeof url !== "string") return url;
+      if (url.startsWith("#") || url.startsWith("mailto:") || url.startsWith("tel:") || url.includes("/editor")) return url;
+      try {
+        const u = new URL(url, window.location.origin);
+        if (u.origin !== window.location.origin) return url;
+        let p = u.pathname;
+        if (!p.includes("/editor")) {
+          p = p === "/" ? "/editor" : (p.endsWith("/") ? `${p}editor` : `${p}/editor`);
+        }
+        return `${p}${u.search}${u.hash}`;
+      } catch (e) {
+        return url;
+      }
+    };
+
+    window.history.pushState = function(state, unused, url) {
+      return origPushState.apply(this, [state, unused, toEditorUrl(url)]);
+    };
+    window.history.replaceState = function(state, unused, url) {
+      return origReplaceState.apply(this, [state, unused, toEditorUrl(url)]);
+    };
+
+    return () => {
+      window.history.pushState = origPushState;
+      window.history.replaceState = origReplaceState;
+    };
+  }, [isActive]);
+
+  // Sync playback speed changes to preview video
+  useEffect(() => {
+    if (previewVideoRef.current && videoState.speed) {
+      previewVideoRef.current.playbackRate = videoState.speed;
+    }
+  }, [videoState.speed]);
 
   // Disable background page scrolling when any modal is open
   useEffect(() => {
-    if (mediaPickerOpen || cropModalOpen || codeModalOpen) {
+    if (mediaPickerOpen || cropModalOpen || codeModalOpen || videoModalOpen) {
       const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => {
         document.body.style.overflow = prevOverflow || "";
       };
     }
-  }, [mediaPickerOpen, cropModalOpen, codeModalOpen]);
+  }, [mediaPickerOpen, cropModalOpen, codeModalOpen, videoModalOpen]);
   
+  // Live website video assets catalog
+  const LIVE_WEBSITE_VIDEOS = [
+    { id: "hero-vid", name: "emaar.mp4 (Hero Background Video)", url: "/videos/emaar.mp4", type: "video" },
+    { id: "hero-mob", name: "emaar-mobile.mp4 (Hero Mobile Video)", url: "/videos/emaar-mobile.mp4", type: "video" },
+    { id: "elite-oasis", name: "elite-oasis.mp4 (Elite Oasis)", url: "/videos/elite-oasis.mp4", type: "video" },
+    { id: "casa-venero", name: "casa-venero.mp4 (Casa Venero)", url: "/videos/casa-venero.mp4", type: "video" },
+    { id: "serenity-hills", name: "serenity-hills.mp4 (Serenity Hills)", url: "/videos/serenity-hills.mp4", type: "video" },
+    { id: "elara", name: "elara.mp4 (Elara Residences)", url: "/videos/elara.mp4", type: "video" },
+    { id: "marbella", name: "marbella.mp4 (Marbella Film)", url: "/videos/marbella.mp4", type: "video" },
+    { id: "emerald-hills", name: "emerald-hills.mp4 (Emerald Hills Film)", url: "/videos/emerald-hills.mp4", type: "video" },
+    { id: "digihomes", name: "Digihomes.mp4 (Digihomes Showcase)", url: "/videos/Digihomes.mp4", type: "video" },
+    { id: "destination", name: "emaar-destination.mp4 (Emaar Destination)", url: "/videos/emaar-destination.mp4", type: "video" },
+    { id: "journey", name: "emaar-india-journey.mp4 (Emaar India Journey)", url: "/videos/emaar-india-journey.mp4", type: "video" },
+    { id: "dummy", name: "emaar-dummy-video.mp4 (Emaar Highlights)", url: "/videos/emaar-dummy-video.mp4", type: "video" }
+  ];
+
+  // Live website image assets catalog
+  const LIVE_WEBSITE_IMAGES = [
+    { id: "img-serenity-big", name: "Serenity Hills Big (Landmark)", url: "/images/landmarks/Serenity-hills-big.webp", type: "image" },
+    { id: "img-business-centre", name: "Business Centre (Landmark)", url: "/images/landmarks/business-centre.jpg", type: "image" },
+    { id: "img-business-square", name: "Business Square (Landmark)", url: "/images/landmarks/business-square.webp", type: "image" },
+    { id: "img-urban-oasis", name: "Urban Oasis (Landmark)", url: "/images/landmarks/urban-oasis.webp", type: "image" },
+    { id: "img-amaris", name: "Amaris (Landmark)", url: "/images/landmarks/amaris.webp", type: "image" },
+    { id: "img-serenity-main", name: "Serenity Main View", url: "/images/serenity-main.jpg", type: "image" },
+    { id: "img-serenity-sec", name: "Serenity Secondary View", url: "/images/serenity-sec.jpg", type: "image" },
+    { id: "img-serenity-hero", name: "Serenity Hero View", url: "/images/serenity-hero-1.webp", type: "image" }
+  ];
+
   // Media state
-  const [mediaFiles, setMediaFiles] = useState([]);
+  const [mediaLibraryTab, setMediaLibraryTab] = useState("all"); // "all" | "images" | "videos"
+  const [mediaFiles, setMediaFiles] = useState([...LIVE_WEBSITE_IMAGES, ...LIVE_WEBSITE_VIDEOS]);
   const [selectedMedia, setSelectedMedia] = useState(null);
   
   // Crop state
@@ -54,6 +260,13 @@ export default function VisualEditor() {
   const [resizingElement, setResizingElement] = useState(null);
   const [boxWidthDropdownOpen, setBoxWidthDropdownOpen] = useState(false);
   const [isTextEditing, setIsTextEditing] = useState(false);
+
+  const multiSelectedElementsRef = useRef(multiSelectedElements);
+  multiSelectedElementsRef.current = multiSelectedElements;
+  const selectedShapeIdRef = useRef(selectedShapeId);
+  selectedShapeIdRef.current = selectedShapeId;
+  const isTextEditingRef = useRef(isTextEditing);
+  isTextEditingRef.current = isTextEditing;
 
   // Section Add Divider on hover
   const [hoveredDivider, setHoveredDivider] = useState(null);
@@ -103,14 +316,76 @@ export default function VisualEditor() {
     align: "left",
     block: "p",
     color: "#0f172a",
-    fontSize: 12
+    fontSize: null
   });
-  const [fontSizeInput, setFontSizeInput] = useState(12);
+  const [fontSizeInput, setFontSizeInput] = useState("");
 
   useEffect(() => {
-    setFontSizeInput(activeFormats.fontSize || 12);
+    setFontSizeInput(activeFormats.fontSize ? activeFormats.fontSize : "");
   }, [activeFormats.fontSize]);
   const [blockDropdownOpen, setBlockDropdownOpen] = useState(false);
+  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [fontFamilyOpen, setFontFamilyOpen] = useState(false);
+  const [fontSizeOpen, setFontSizeOpen] = useState(false);
+  const [editorTooltip, setEditorTooltip] = useState({ visible: false, text: "", x: 0, y: 0, placement: "top" });
+
+  const showEditorTooltip = (e, text, placement = "top") => {
+    if (!e || !e.currentTarget) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const effectivePlacement = placement === "bottom" || rect.top < 60 ? "bottom" : "top";
+    setEditorTooltip({
+      visible: true,
+      text,
+      x: rect.left + rect.width / 2,
+      y: effectivePlacement === "bottom" ? rect.bottom + 8 : rect.top - 8,
+      placement: effectivePlacement
+    });
+  };
+
+  const hideEditorTooltip = () => {
+    setEditorTooltip((prev) => (prev.visible ? { visible: false, text: "", x: 0, y: 0, placement: "top" } : prev));
+  };
+
+  // Global dismiss for floating tooltips so they NEVER linger or freeze in mid-air
+  useEffect(() => {
+    const handleGlobalHideTooltip = (e) => {
+      if (e?.type === "mousemove") {
+        if (!e.target?.closest?.(".word-tool-btn, .word-tool-select, #dynamicTextPillBar")) {
+          setEditorTooltip((prev) => (prev.visible ? { visible: false, text: "", x: 0, y: 0, placement: "top" } : prev));
+        }
+        return;
+      }
+      setEditorTooltip((prev) => (prev.visible ? { visible: false, text: "", x: 0, y: 0, placement: "top" } : prev));
+    };
+    window.addEventListener("mousedown", handleGlobalHideTooltip, true);
+    window.addEventListener("scroll", handleGlobalHideTooltip, true);
+    window.addEventListener("blur", handleGlobalHideTooltip);
+    window.addEventListener("mousemove", handleGlobalHideTooltip, { passive: true });
+    return () => {
+      window.removeEventListener("mousedown", handleGlobalHideTooltip, true);
+      window.removeEventListener("scroll", handleGlobalHideTooltip, true);
+      window.removeEventListener("blur", handleGlobalHideTooltip);
+      window.removeEventListener("mousemove", handleGlobalHideTooltip);
+    };
+  }, []);
+
+  // Close custom font family and font size dropdowns on outside click
+  useEffect(() => {
+    if (!fontFamilyOpen && !fontSizeOpen) return;
+    const handleOutsideFontDropdown = (e) => {
+      if (!e.target.closest("#customFontFamilyWrapper") && !e.target.closest("#customFontSizeWrapper")) {
+        setFontFamilyOpen(false);
+        setFontSizeOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideFontDropdown, true);
+    document.addEventListener("touchstart", handleOutsideFontDropdown, true);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideFontDropdown, true);
+      document.removeEventListener("touchstart", handleOutsideFontDropdown, true);
+    };
+  }, [fontFamilyOpen, fontSizeOpen]);
 
   // Immediately close block dropdown when user clicks anything else in the toolbar or in the app
   useEffect(() => {
@@ -209,37 +484,158 @@ export default function VisualEditor() {
     setTimeout(() => setToastMsg(""), 3500);
   };
 
-  const updateBoxRect = (target = activeTextRef.current) => {
-    if (!target || !document.body.contains(target)) {
+  const checkIsElementCoveredOrOffscreen = (el) => {
+    if (!el || typeof window === "undefined" || !document.body.contains(el)) return true;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0 || r.width <= 4 || r.height <= 4) return true;
+
+    // 1. Strict Visibility & Closed Container Check
+    // If element or any ancestor is hidden by display:none, visibility:hidden, opacity:0, or closed mega panel / dropdown
+    try {
+      const closedPanel = el.closest?.(
+        '.mega-panel:not([data-open="true"]), [data-testid="site-header-mega-panel"]:not([data-open="true"]), [data-open="false"], [aria-expanded="false"] [role="listbox"], [data-state="closed"]'
+      );
+      if (closedPanel) {
+        return true;
+      }
+
+      let curr = el;
+      while (curr && curr !== document.body && curr !== document.documentElement) {
+        const style = window.getComputedStyle(curr);
+        if (style.display === "none") return true;
+        if (style.visibility === "hidden" || style.visibility === "collapse") return true;
+        if (parseFloat(style.opacity || "1") < 0.05) return true;
+        if (curr.getAttribute?.("data-open") === "false") return true;
+        curr = curr.parentElement;
+      }
+    } catch (e) {}
+
+    const isNavbarEl = Boolean(el.closest?.("header, nav, .site-header, .mega-panel, [data-testid='site-header-mega-panel']"));
+    const studioBarEl = document.getElementById("visualEditorStudioBar");
+    const studioBarBottom = studioBarEl ? studioBarEl.getBoundingClientRect().bottom : 48;
+
+    if (isNavbarEl) {
+      // Navbar elements stay in sticky header: offscreen only if scrolled above studio bar or outside viewport
+      if (r.bottom <= studioBarBottom || r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth) {
+        return true;
+      }
+      return false;
+    }
+
+    const headerEl = document.querySelector("header.site-header, header");
+    const topLimit = Math.max(
+      headerEl ? headerEl.getBoundingClientRect().bottom : 0,
+      studioBarBottom,
+      54
+    );
+
+    // Viewport bounds: for page content elements, top limit is header bottom / studio bar
+    if (r.bottom <= topLimit || r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth) {
+      return true;
+    }
+
+    // Direct visibility check: if center of element is top-most in viewport, it is physically visible
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    if (cx >= 0 && cx <= window.innerWidth && cy >= topLimit && cy <= window.innerHeight) {
+      try {
+        const topEl = document.elementFromPoint(cx, cy);
+        if (topEl && (el.contains(topEl) || topEl.contains(el) || topEl.closest?.("#activeElementBoxOverlay, #dynamicTextPillBar"))) {
+          return false;
+        }
+      } catch (e) {}
+    }
+
+    // Check if covered by a subsequent section in ScrollStage
+    const myStage = el.closest("[data-stage]");
+    if (myStage) {
+      const allStages = Array.from(document.querySelectorAll("[data-stage]"));
+      const myStageIdx = allStages.indexOf(myStage);
+      if (myStageIdx !== -1) {
+        for (let i = myStageIdx + 1; i < allStages.length; i++) {
+          const higherStage = allStages[i];
+          const sRect = higherStage.getBoundingClientRect();
+          if (sRect.top <= r.top && sRect.bottom >= r.bottom && sRect.left <= r.left && sRect.right >= r.right) {
+            const hsStyle = window.getComputedStyle(higherStage);
+            if (hsStyle.display !== "none" && hsStyle.visibility !== "hidden" && parseFloat(hsStyle.opacity || "1") > 0.4) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  };
+
+  const updateBoxRect = (target = activeTextRef.current, forceShow = false) => {
+    if (!target || !document.body.contains(target) || isWebsiteModalOpen() || (!forceShow && checkIsElementCoveredOrOffscreen(target))) {
       setActiveBoxInfo(null);
       setTextPillBar((prev) => ({ ...prev, visible: false }));
+      setEditorTooltip((prev) => (prev.visible ? { visible: false, text: "", x: 0, y: 0, placement: "top" } : prev));
+      if (activeTextRef.current === target) {
+        exitTextEditing();
+        activeTextRef.current = null;
+      }
       return;
     }
     const rect = target.getBoundingClientRect();
+    if (rect.width <= 4 || rect.height <= 4 || target.offsetParent === null) {
+      setActiveBoxInfo(null);
+      setTextPillBar((prev) => ({ ...prev, visible: false }));
+      setEditorTooltip((prev) => (prev.visible ? { visible: false, text: "", x: 0, y: 0, placement: "top" } : prev));
+      if (activeTextRef.current === target) {
+        exitTextEditing();
+        activeTextRef.current = null;
+      }
+      return;
+    }
+    const isHidden = checkIsElementCoveredOrOffscreen(target);
+    if (isHidden) {
+      setActiveBoxInfo(null);
+      setTextPillBar((prev) => ({ ...prev, visible: false }));
+      if (activeTextRef.current === target) {
+        exitTextEditing();
+        activeTextRef.current = null;
+      }
+      return;
+    }
+
     setActiveBoxInfo({
       el: target,
       top: rect.top,
       left: rect.left,
       width: rect.width,
       height: rect.height,
-      tag: target.tagName.toLowerCase()
+      tag: target.tagName.toLowerCase(),
+      hidden: false
     });
-    const pillWidth = 560;
+
+    if (isHidden) {
+      setTextPillBar((prev) => ({ ...prev, visible: false }));
+      return;
+    }
+
+    // Activate the toolbar ONLY when the text cursor (caret / selection) appears on a real text element
+    const targetText = target?.innerText?.trim() || "";
+    const isTextElement = Boolean(target && (targetText.length > 0 || ["H1","H2","H3","H4","H5","H6","P","SPAN"].includes(target.tagName)));
+    const hasCursor = isTextElement && (forceShow || isTextEditing || (target && target.isContentEditable && (document.activeElement === target || target.contains(document.activeElement))));
+    if (!hasCursor) {
+      setTextPillBar((prev) => ({ ...prev, visible: false }));
+      return;
+    }
+
+    const pillWidth = 660; // Exact width of word-ribbon-toolbar
     const pillHeight = 44;
     const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
-    const vh = typeof window !== "undefined" ? window.innerHeight : 800;
     const topBarHeight = 54;
-    const margin = 12;
+    const minLeftMargin = 16;
+    const rightScrollbarClearance = 32; // 32px safe margin so it NEVER touches or hides behind side scrollbar!
 
     const targetCenterX = rect.left + rect.width / 2;
-    const halfWidth = pillWidth / 2;
+    let pillLeft = targetCenterX - pillWidth / 2;
 
-    let pillCenterX;
-    if (pillWidth + margin * 2 >= vw) {
-      pillCenterX = vw / 2;
-    } else {
-      pillCenterX = Math.max(halfWidth + margin, Math.min(vw - halfWidth - margin, targetCenterX));
-    }
+    // Strict clamping within viewport with scrollbar clearance:
+    pillLeft = Math.max(minLeftMargin, Math.min(vw - pillWidth - rightScrollbarClearance, pillLeft));
 
     // SMART DROPDOWN DETECTION:
     // If the element has an open dropdown menu underneath it (e.g. navbar links like PROJECTS), do NOT overlap the dropdown!
@@ -264,7 +660,7 @@ export default function VisualEditor() {
     const bottomClearance = isTopHeaderElement ? 34 : 14;
     const fitsAbove = rect.top - pillHeight - 16 >= topBarHeight + 10;
     let placement = "top";
-    let y = rect.top - 12;
+    let y = rect.top - pillHeight - 12;
 
     if (dropdownBottom) {
       // An active dropdown is open under this item! Place toolbar comfortably BELOW the entire dropdown!
@@ -275,12 +671,12 @@ export default function VisualEditor() {
       y = Math.max(topBarHeight + bottomClearance, rect.bottom + bottomClearance);
     }
 
-    const pillLeft = pillCenterX - halfWidth;
-    const arrowPos = Math.max(20, Math.min(pillWidth - 20, targetCenterX - pillLeft));
+    const arrowPos = Math.max(26, Math.min(pillWidth - 26, targetCenterX - pillLeft));
 
     setTextPillBar({
       visible: true,
-      x: pillCenterX,
+      left: pillLeft,
+      x: pillLeft,
       y: y,
       placement,
       arrowOffset: arrowPos
@@ -292,6 +688,7 @@ export default function VisualEditor() {
     if (!activeBoxInfo) return;
     let animId;
     let lastRect = null;
+    let lastHidden = null;
     let lastDropdownBottom = null;
 
     const syncActiveBox = () => {
@@ -300,39 +697,58 @@ export default function VisualEditor() {
         const wrapper = el.tagName === "IMG" ? getImgWrapper(el) : null;
         const target = wrapper || el;
         const r = target.getBoundingClientRect();
+        if (r.width <= 4 || r.height <= 4 || target.offsetParent === null) {
+          setActiveBoxInfo(null);
+          setTextPillBar((prev) => ({ ...prev, visible: false }));
+          return;
+        }
+        const isHidden = checkIsElementCoveredOrOffscreen(target);
 
-        // Check if a dropdown under this item opened or closed
-        const headerEl = document.querySelector("header") || target.closest("header, nav");
-        let curDropdownBottom = null;
-        if (headerEl) {
-          const candidates = headerEl.querySelectorAll(
-            '[class*="absolute"], [class*="shadow-lg"], [class*="shadow-md"], [class*="dropdown"], [class*="menu"], ul, div[style*="position: absolute"]'
-          );
-          for (const d of candidates) {
-            if (d.contains(target) || target.contains(d)) continue;
-            const dRect = d.getBoundingClientRect();
-            if (dRect.height > 20 && dRect.width > 30 && dRect.bottom > r.bottom && dRect.top <= r.bottom + 90) {
-              if (!curDropdownBottom || dRect.bottom > curDropdownBottom) {
-                curDropdownBottom = dRect.bottom;
-              }
-            }
+        if (isHidden !== lastHidden) {
+          lastHidden = isHidden;
+          setActiveBoxInfo((prev) => (prev ? { ...prev, hidden: isHidden } : null));
+          if (isHidden) {
+            setTextPillBar((prev) => ({ ...prev, visible: false }));
+          } else {
+            updateBoxRect(target);
           }
         }
 
-        if (curDropdownBottom !== lastDropdownBottom) {
-          lastDropdownBottom = curDropdownBottom;
-          updateBoxRect(target);
-        }
+        if (!isHidden) {
+          // Check if a dropdown under this item opened or closed
+          const headerEl = document.querySelector("header") || target.closest("header, nav");
+          let curDropdownBottom = null;
+          if (headerEl) {
+            const candidates = headerEl.querySelectorAll(
+              '[class*="absolute"], [class*="shadow-lg"], [class*="shadow-md"], [class*="dropdown"], [class*="menu"], ul, div[style*="position: absolute"]'
+            );
+            for (const d of candidates) {
+              if (d.contains(target) || target.contains(d)) continue;
+              const dRect = d.getBoundingClientRect();
+              if (dRect.height > 20 && dRect.width > 30 && dRect.bottom > r.bottom && dRect.top <= r.bottom + 90) {
+                if (!curDropdownBottom || dRect.bottom > curDropdownBottom) {
+                  curDropdownBottom = dRect.bottom;
+                }
+              }
+            }
+          }
 
-        if (!lastRect || Math.abs(r.left - lastRect.left) > 0.5 || Math.abs(r.top - lastRect.top) > 0.5 || Math.abs(r.width - lastRect.width) > 0.5 || Math.abs(r.height - lastRect.height) > 0.5) {
-          lastRect = { left: r.left, top: r.top, width: r.width, height: r.height };
-          setActiveBoxInfo((prev) => prev ? {
-            ...prev,
-            top: r.top,
-            left: r.left,
-            width: r.width,
-            height: r.height
-          } : null);
+          if (curDropdownBottom !== lastDropdownBottom) {
+            lastDropdownBottom = curDropdownBottom;
+            updateBoxRect(target);
+          }
+
+          if (!lastRect || Math.abs(r.left - lastRect.left) > 0.5 || Math.abs(r.top - lastRect.top) > 0.5 || Math.abs(r.width - lastRect.width) > 0.5 || Math.abs(r.height - lastRect.height) > 0.5) {
+            lastRect = { left: r.left, top: r.top, width: r.width, height: r.height };
+            setActiveBoxInfo((prev) => prev ? {
+              ...prev,
+              top: r.top,
+              left: r.left,
+              width: r.width,
+              height: r.height,
+              hidden: false
+            } : null);
+          }
         }
       } else {
         setActiveBoxInfo(null);
@@ -391,10 +807,20 @@ export default function VisualEditor() {
   };
 
   const handleDeleteActiveElement = () => {
-    const el = activeTextRef.current;
+    let el = activeTextRef.current;
+    if (!el) return;
+    if (el.tagName === "IMG") {
+      const wrapper = getImgWrapper(el);
+      if (wrapper && wrapper !== document.body && wrapper.parentNode) {
+        el = wrapper;
+      }
+    }
     if (!el || !el.parentNode) return;
     const parent = el.parentNode;
     const nextSibling = el.nextSibling;
+
+    // Immediately exit text editing and blur active cursor
+    exitTextEditing();
 
     pushHistory({
       desc: "Delete block",
@@ -406,6 +832,7 @@ export default function VisualEditor() {
         }
         activeTextRef.current = el;
         updateBoxRect(el);
+        syncTextToCMS(el);
       },
       redo: () => {
         if (el.parentNode) el.parentNode.removeChild(el);
@@ -413,6 +840,7 @@ export default function VisualEditor() {
         setActiveBoxInfo(null);
         setTextPillBar((prev) => ({ ...prev, visible: false }));
         setBlockDropdownOpen(false);
+        syncTextToCMS(parent);
       }
     });
 
@@ -421,6 +849,7 @@ export default function VisualEditor() {
     setActiveBoxInfo(null);
     setTextPillBar((prev) => ({ ...prev, visible: false }));
     setBlockDropdownOpen(false);
+    syncTextToCMS(parent);
     showToast("✓ Deleted block. Press Ctrl+Z to undo.");
   };
 
@@ -554,34 +983,191 @@ export default function VisualEditor() {
     return imgEl.parentElement;
   };
 
+  const updateActiveFormats = (target) => {
+    if (!target) return;
+    try {
+      const sel = window.getSelection();
+      let sampleNode = target;
+      if (sel && !sel.isCollapsed && target.contains(sel.anchorNode)) {
+        sampleNode = sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode;
+      } else if (savedSelectionRangeRef.current && !savedSelectionRangeRef.current.collapsed && target.contains(savedSelectionRangeRef.current.commonAncestorContainer)) {
+        const rNode = savedSelectionRangeRef.current.commonAncestorContainer;
+        sampleNode = rNode.nodeType === Node.TEXT_NODE ? rNode.parentElement : rNode;
+      }
+      const comp = window.getComputedStyle(sampleNode || target);
+      const isBold = comp.fontWeight === "bold" || parseInt(comp.fontWeight, 10) >= 600;
+      const isItalic = comp.fontStyle === "italic";
+      const isUnderline = comp.textDecorationLine?.includes("underline") || comp.textDecoration?.includes("underline");
+      const isStrike = comp.textDecorationLine?.includes("line-through") || comp.textDecoration?.includes("line-through");
+      const textAlign = comp.textAlign || "left";
+      const tagName = target.tagName.toLowerCase();
+      const block = ["h1", "h2", "h3"].includes(tagName) ? tagName : "p";
+      const color = comp.color;
+
+      // Dynamic Font Size Detection:
+      // If user highlighted a text selection across elements with different sizes, or if selected block has mixed sizes:
+      // show nothing but blank!
+      const detectedSizes = new Set();
+      if (sel && !sel.isCollapsed && target.contains(sel.anchorNode)) {
+        try {
+          const range = sel.getRangeAt(0);
+          const walker = document.createTreeWalker(
+            range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+              ? range.commonAncestorContainer.parentElement
+              : range.commonAncestorContainer,
+            NodeFilter.SHOW_TEXT,
+            {
+              acceptNode(n) {
+                return range.intersectsNode(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+              }
+            }
+          );
+          let n = walker.nextNode();
+          while (n) {
+            if (n.textContent && n.textContent.trim().length > 0 && n.parentElement) {
+              const sz = Math.round(parseFloat(window.getComputedStyle(n.parentElement).fontSize));
+              if (!isNaN(sz) && sz > 0) detectedSizes.add(sz);
+            }
+            n = walker.nextNode();
+          }
+        } catch (e) {}
+      }
+
+      if (detectedSizes.size === 0) {
+        // Collapsed cursor or whole block selected
+        const childTextEls = Array.from(target.querySelectorAll("h1, h2, h3, h4, h5, h6, p, span, a, button, label, li, b, strong, em, i, div")).filter(
+          (c) => c.childNodes && Array.from(c.childNodes).some((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim().length > 0)
+        );
+        if (childTextEls.length > 1) {
+          childTextEls.forEach((c) => {
+            const sz = Math.round(parseFloat(window.getComputedStyle(c).fontSize));
+            if (!isNaN(sz) && sz > 0) detectedSizes.add(sz);
+          });
+        }
+        if (detectedSizes.size === 0) {
+          const sz = Math.round(parseFloat(comp.fontSize));
+          if (!isNaN(sz) && sz > 0) detectedSizes.add(sz);
+        }
+      }
+
+      // If more than one size is there: show nothing but blank (null)!
+      let dynamicFontSize = null;
+      if (detectedSizes.size === 1) {
+        dynamicFontSize = Array.from(detectedSizes)[0];
+      } else if (detectedSizes.size > 1) {
+        dynamicFontSize = null; // Mixed sizes: show blank
+      }
+
+      let detectedFont = "Optima, Cinzel, serif";
+      const ffLower = (comp.fontFamily || "").toLowerCase();
+      if (ffLower.includes("cinzel")) {
+        detectedFont = "Cinzel, serif";
+      } else if (ffLower.includes("lato")) {
+        detectedFont = "Lato, sans-serif";
+      } else if (ffLower.includes("jakarta")) {
+        detectedFont = "'Plus Jakarta Sans', sans-serif";
+      } else if (ffLower.includes("optima")) {
+        detectedFont = "Optima, Cinzel, serif";
+      }
+
+      // Check if target or any parent/ancestor is an anchor
+      const anchor = (sampleNode && sampleNode.closest ? sampleNode.closest("a") : null) || (target.closest ? target.closest("a") : null) || (target.tagName === "A" ? target : null) || target.querySelector?.("a");
+      const currentHref = anchor ? (anchor.getAttribute("href") || anchor.dataset?.cmsOrigHref || "") : "";
+      setLinkUrl(currentHref);
+      setLinkPopoverOpen(false);
+      setFontFamilyOpen(false);
+      setFontSizeOpen(false);
+      setBlockDropdownOpen(false);
+      setEditorTooltip((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+
+      setActiveFormats({
+        bold: isBold,
+        italic: isItalic,
+        underline: isUnderline,
+        strikeThrough: isStrike,
+        hasLink: Boolean(currentHref),
+        align: textAlign.includes("center") ? "center" : (textAlign.includes("right") ? "right" : "left"),
+        block,
+        color,
+        fontSize: dynamicFontSize,
+        fontFamily: detectedFont
+      });
+    } catch (e) {}
+  };
+
   const enterTextEditing = (targetNode, clientX, clientY) => {
     const target = targetNode || activeTextRef.current;
     if (!target) return;
     if (target.tagName === "IMG" || target.querySelector("img")) return;
     target.contentEditable = "true";
-    target.focus();
-    setIsTextEditing(true);
+    target.style.setProperty("user-select", "text", "important");
+    target.style.setProperty("-webkit-user-select", "text", "important");
+    target.style.setProperty("pointer-events", "auto", "important");
 
-    if (clientX !== undefined && clientY !== undefined && document.caretRangeFromPoint) {
-      try {
-        const range = document.caretRangeFromPoint(clientX, clientY);
-        if (range && target.contains(range.startContainer)) {
-          const sel = window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-      } catch (err) {}
+    // Protect nested SVGs or icons so cursor and typing stay in the text
+    target.querySelectorAll("svg").forEach((svg) => {
+      svg.contentEditable = "false";
+      svg.style.pointerEvents = "none";
+      svg.style.userSelect = "none";
+    });
+
+    // If anchor has href, temporarily preserve it so browser doesn't block text cursor / typing
+    if (target.tagName === "A" || target.closest("a")) {
+      const anchor = target.tagName === "A" ? target : target.closest("a");
+      if (anchor.getAttribute("href") && !anchor.dataset.cmsOrigHref) {
+        anchor.dataset.cmsOrigHref = anchor.getAttribute("href");
+        anchor.removeAttribute("href");
+      }
     }
+
+    setIsTextEditing(true);
+    const sel = window.getSelection();
+    const hasSelection = sel && !sel.isCollapsed && sel.toString().trim().length > 0;
+
+    if (hasSelection) {
+      // User dragged to select text (blue highlight)!
+      // KEEP THE BLUE HIGHLIGHTED SELECTION INTACT - DO NOT COLLAPSE!
+      try {
+        savedSelectionRangeRef.current = sel.getRangeAt(0).cloneRange();
+      } catch (e) {}
+    } else {
+      target.focus();
+      if (clientX !== undefined && clientY !== undefined && document.caretRangeFromPoint) {
+        try {
+          const range = document.caretRangeFromPoint(clientX, clientY);
+          if (range && (target === range.startContainer || target.contains(range.startContainer))) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        } catch (err) {}
+      }
+    }
+    updateBoxRect(target, true);
+    updateActiveFormats(target);
   };
 
   const exitTextEditing = () => {
     if (activeTextRef.current) {
       try {
+        // Restore anchor href if temporarily removed
+        const anchor = activeTextRef.current.tagName === "A" ? activeTextRef.current : activeTextRef.current.closest?.("a");
+        if (anchor && anchor.dataset?.cmsOrigHref) {
+          anchor.setAttribute("href", anchor.dataset.cmsOrigHref);
+          delete anchor.dataset.cmsOrigHref;
+        }
         activeTextRef.current.contentEditable = "false";
+        activeTextRef.current.style.removeProperty("user-select");
+        activeTextRef.current.style.removeProperty("-webkit-user-select");
         activeTextRef.current.blur();
       } catch (e) {}
     }
+    try {
+      window.getSelection()?.removeAllRanges();
+    } catch (e) {}
     setIsTextEditing(false);
+    setTextPillBar((prev) => ({ ...prev, visible: false }));
+    setLinkPopoverOpen(false);
+    hideEditorTooltip();
   };
 
   const handleStartDragElement = (e) => {
@@ -891,7 +1477,9 @@ export default function VisualEditor() {
           const customAddedEls = Array.from(document.querySelectorAll(".custom-added-section"));
           const customSections = customAddedEls.map((sec, idx) => ({
             id: "custom-sec-" + (idx + 1),
-            html: sec.innerHTML.replace(/<div style="position: absolute; top: 14px; right: 24px[\s\S]*?<\/div>/, ""),
+            html: sec.innerHTML
+              .replace(/<div style="position: absolute; top: 14px; right: 24px[\s\S]*?<\/div>/, "")
+              .replace(/\s*contenteditable=(["'])?(?:true|false)\1/gi, ""),
             title: sec.querySelector("h2")?.innerText.trim() || "",
             content: sec.querySelector("p")?.innerText.trim() || ""
           }));
@@ -899,8 +1487,11 @@ export default function VisualEditor() {
             const pagesRes = await fetch("http://localhost:5000/api/pages");
             const pagesData = await pagesRes.json();
             if (pagesData.success && Array.isArray(pagesData.data)) {
-              const cleanPath = currentPath.startsWith("/") ? currentPath : `/${currentPath}`;
-              const targetPage = pagesData.data.find((p) => p.slug === cleanPath || p.slug === currentPath);
+              let cleanPath = currentPath.startsWith("/") ? currentPath : `/${currentPath}`;
+              if (cleanPath.endsWith("/editor")) {
+                cleanPath = cleanPath.slice(0, -7) || "/";
+              }
+              const targetPage = pagesData.data.find((p) => p.slug === cleanPath || p.slug === currentPath || p.slug === cleanPath.replace(/^\//, ""));
               if (targetPage) {
                 await fetch(`http://localhost:5000/api/pages/${targetPage.id}`, {
                   method: "PUT",
@@ -932,12 +1523,24 @@ export default function VisualEditor() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const isEditorRoute = isEditorPath(pathname) || isEditorPath(window.location.pathname);
+    const isPreviewRoute = pathname === "/preview" || pathname?.startsWith("/preview") || window.location.pathname === "/preview" || window.location.pathname.startsWith("/preview");
     const params = new URLSearchParams(window.location.search);
-    if (params.get("editor") === "true") {
+    const isEditorParam = params.get("editor") === "true";
+
+    if ((isEditorRoute || isEditorParam) && !isPreviewRoute) {
       setIsActive(true);
+      document.body.classList.add("cms-editor-active");
       if (params.get("openSection") === "true") {
         setTimeout(() => handleOpenSectionModal(), 200);
       }
+    } else {
+      setIsActive(false);
+      document.body.classList.remove("cms-editor-active");
+      // Remove any lingering contenteditable attributes from any element
+      document.querySelectorAll("[contenteditable]").forEach((el) => {
+        el.removeAttribute("contenteditable");
+      });
     }
 
     // Top-level listener: always ready to open modal and activate editor from blank canvas or anywhere
@@ -953,58 +1556,81 @@ export default function VisualEditor() {
       window.removeEventListener("cms-open-section-modal", handleOpenModal);
       delete window.__cmsOpenSectionModal;
     };
-  }, []);
+  }, [pathname]);
+
+  // Ensure contenteditable is never left active outside editor mode (live website)
+  useEffect(() => {
+    if (isActive) return;
+    const cleanAll = () => {
+      document.querySelectorAll("[contenteditable]").forEach((el) => {
+        el.removeAttribute("contenteditable");
+      });
+    };
+    cleanAll();
+    const t1 = setTimeout(cleanAll, 100);
+    const t2 = setTimeout(cleanAll, 400);
+    const t3 = setTimeout(cleanAll, 1200);
+
+    const observer = new MutationObserver(() => {
+      cleanAll();
+    });
+    if (typeof document !== "undefined" && document.body) {
+      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["contenteditable"] });
+    }
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      observer.disconnect();
+    };
+  }, [isActive]);
+
+  // Continuous sync loop to track elements during smooth inertia scroll (e.g. ScrollStage lerp)
+  useEffect(() => {
+    if (!isActive) return;
+    let animId;
+    let lastTop = -99999;
+    let lastLeft = -99999;
+
+    const syncActiveBox = () => {
+      const target = activeTextRef.current;
+      if (target && document.body.contains(target) && !isWebsiteModalOpen()) {
+        const wrapper = target.tagName === "IMG" ? getImgWrapper(target) : null;
+        const elToMeasure = wrapper || target;
+        const r = elToMeasure.getBoundingClientRect();
+        if (r.width <= 4 || r.height <= 4 || target.offsetParent === null) {
+          setActiveBoxInfo(null);
+          setTextPillBar((prev) => ({ ...prev, visible: false }));
+          return;
+        }
+        if (Math.abs(r.top - lastTop) > 0.5 || Math.abs(r.left - lastLeft) > 0.5) {
+          lastTop = r.top;
+          lastLeft = r.left;
+          updateBoxRect(elToMeasure);
+        }
+      }
+      animId = requestAnimationFrame(syncActiveBox);
+    };
+
+    animId = requestAnimationFrame(syncActiveBox);
+    return () => cancelAnimationFrame(animId);
+  }, [isActive]);
 
   // Set up inline text editing and right click listener
   useEffect(() => {
     if (!isActive) return;
 
-    // Read and update active formatting from target element or selection
-    const updateActiveFormats = (target) => {
-      if (!target) return;
-      try {
-        const sel = window.getSelection();
-        let sampleNode = target;
-        if (sel && !sel.isCollapsed && target.contains(sel.anchorNode)) {
-          sampleNode = sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode;
-        } else if (savedSelectionRangeRef.current && !savedSelectionRangeRef.current.collapsed && target.contains(savedSelectionRangeRef.current.commonAncestorContainer)) {
-          const rNode = savedSelectionRangeRef.current.commonAncestorContainer;
-          sampleNode = rNode.nodeType === Node.TEXT_NODE ? rNode.parentElement : rNode;
-        }
-        const comp = window.getComputedStyle(sampleNode || target);
-        const isBold = comp.fontWeight === "bold" || parseInt(comp.fontWeight, 10) >= 600;
-        const isItalic = comp.fontStyle === "italic";
-        const isUnderline = comp.textDecorationLine?.includes("underline") || comp.textDecoration?.includes("underline");
-        const isStrike = comp.textDecorationLine?.includes("line-through") || comp.textDecoration?.includes("line-through");
-        const textAlign = comp.textAlign || "left";
-        const tagName = target.tagName.toLowerCase();
-        const block = ["h1", "h2", "h3"].includes(tagName) ? tagName : "p";
-        const color = comp.color;
-
-        const parsedFontSize = parseInt(comp.fontSize, 10) || 12;
-
-        setActiveFormats({
-          bold: isBold,
-          italic: isItalic,
-          underline: isUnderline,
-          strikeThrough: isStrike,
-          align: textAlign.includes("center") ? "center" : (textAlign.includes("right") ? "right" : "left"),
-          block,
-          color,
-          fontSize: parsedFontSize
-        });
-      } catch (e) {}
-    };
-
-    // Helper to find editable text target (including navbar links, buttons, headers, paragraphs)
+    // Helper to find editable text target (including navbar links, buttons, headers, paragraphs, spans)
     const findEditableTextTarget = (el) => {
       if (!el || el.closest("#visualEditorStudioBar") || el.closest(".visual-editor-portal") || el.closest("#dynamicTextPillBar")) return null;
       if (["VIDEO", "IMG", "INPUT", "SELECT", "TEXTAREA"].includes(el.tagName)) return null;
 
-      // Priority 1: Heading or paragraph block ancestor
-      const blockAncestor = el.closest("h1, h2, h3, h4, h5, h6, p");
-      if (blockAncestor && !blockAncestor.closest("#visualEditorStudioBar") && !blockAncestor.closest(".visual-editor-portal")) {
-        return blockAncestor;
+      // Priority 1: Direct text elements (spans, labels, paragraphs, headings, filter dropdown options)
+      const textEl = el.closest("h1, h2, h3, h4, h5, h6, p, span, label, time, figcaption, blockquote, b, strong, em, i") ||
+        (el.closest('[role="option"]') ? el.closest('[role="option"]').querySelector("span") : null);
+      if (textEl && !textEl.closest("#visualEditorStudioBar") && !textEl.closest(".visual-editor-portal")) {
+        return textEl;
       }
 
       // Priority 2: Links, buttons, list items
@@ -1013,13 +1639,13 @@ export default function VisualEditor() {
         return linkOrBtn;
       }
 
-      if (["H1", "H2", "H3", "H4", "H5", "H6", "P", "SPAN", "BUTTON", "A", "LI", "LABEL"].includes(el.tagName)) {
+      if (["H1", "H2", "H3", "H4", "H5", "H6", "P", "SPAN", "TIME", "FIGCAPTION", "BUTTON", "A", "LI", "LABEL"].includes(el.tagName)) {
         return el;
       }
       if (el.tagName === "DIV") {
         const text = el.innerText?.trim();
-        const hasMajorSections = el.querySelector("section, header, footer, nav");
-        if (text && text.length > 0 && !hasMajorSections) {
+        const hasBlockChildren = Boolean(el.querySelector("div, p, h1, h2, h3, h4, h5, h6, section, article, header, nav, footer, ul, ol, li, img, video, table, form"));
+        if (text && text.length > 0 && !hasBlockChildren) {
           return el;
         }
       }
@@ -1028,6 +1654,23 @@ export default function VisualEditor() {
 
     // Enable contentEditable on text elements or select image with container bounding box
     const handleTextClick = (e) => {
+      if (!e.target.closest("#contextMenuPortal")) {
+        setContextMenu((prev) => (prev.visible ? { visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false } : prev));
+      }
+      if (isExecutingLiveActionRef.current) return;
+      if (isWebsiteModalOpen() && e.target.closest('[data-testid="enquire-modal"], [data-testid="enquire-modal-scrim"], [data-testid="mobile-more-sheet"][data-open="true"]')) {
+        return;
+      }
+
+      // DO NOT intercept video media control buttons (play, pause, mute, unmute)
+      const isMediaCtrl = Boolean(
+        e.target.closest?.('button[aria-label*="video" i], button[aria-label*="Video" i], button[aria-label*="Play" i], button[aria-label*="Pause" i], button[aria-label*="Mute" i], button[aria-label*="Sound" i], .video-ctrl, [data-media-control]') ||
+        e.target.parentElement?.closest?.('button[aria-label*="video" i], button[aria-label*="Video" i], button[aria-label*="Play" i], button[aria-label*="Pause" i], button[aria-label*="Mute" i], button[aria-label*="Sound" i], .video-ctrl, [data-media-control]')
+      );
+      if (isMediaCtrl) {
+        return; // Allow native React onClick={togglePlay} and onClick={toggleMute} to execute freely!
+      }
+
       if (
         e.target.closest("#visualEditorStudioBar") ||
         e.target.closest(".visual-editor-portal") ||
@@ -1035,9 +1678,44 @@ export default function VisualEditor() {
         e.target.closest("#activeElementBoxOverlay")
       ) return;
 
-      // Direct image click support
-      const clickedImg = e.target.tagName === "IMG" ? e.target : e.target.querySelector("img");
+      // Only toggle drawer if clicking the filter icon button or close icon button (not text inside)
+      if (
+        (e.target.closest('[data-testid="home-search-filter-trigger"]') && !e.target.closest("span, p, h1, h2, h3, h4, label")) ||
+        (e.target.closest('[data-testid="adv-filters-close"]') && !e.target.closest("span, p, h1, h2, h3, h4, label"))
+      ) {
+        return;
+      }
+
+      // Priority 0: Direct text blocks (including spans, labels, headings, and search filter dropdown options)
+      const directText =
+        e.target.closest("h1, h2, h3, h4, h5, h6, p, span, label, time, figcaption, blockquote, b, strong, em, i") ||
+        (e.target.closest('[role="option"]') ? e.target.closest('[role="option"]').querySelector("span") : null);
+      if (directText && !directText.closest("#visualEditorStudioBar") && !directText.closest(".visual-editor-portal")) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        setSelectedShapeId(null);
+        setMultiSelectedElements([]);
+        activeTextRef.current = directText;
+        enterTextEditing(directText, e.clientX, e.clientY);
+
+        if (initialTextRef.current?.el !== directText) {
+          initialTextRef.current = { el: directText, html: directText.innerHTML };
+        }
+
+        updateBoxRect(directText, true);
+        updateActiveFormats(directText);
+        return;
+      }
+
+      // Priority 1: Direct Image click support (Images, Figures, Photo Cards)
+      const clickedImg = e.target.tagName === "IMG" ? e.target : e.target.closest("picture, figure")?.querySelector("img");
       if (clickedImg && !e.target.closest("#visualEditorStudioBar") && !e.target.closest(".visual-editor-portal")) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
         setSelectedShapeId(null);
         setMultiSelectedElements([]);
         if (clickedImg.style.left && clickedImg.style.left !== "0px") clickedImg.style.left = "0px";
@@ -1049,32 +1727,80 @@ export default function VisualEditor() {
         return;
       }
 
+      // Priority 2: Direct Video click support (e.g. CommunitiesCollage, ShowcaseMosaic, Hero, etc.)
+      let clickedVideo = e.target.tagName === "VIDEO" ? e.target : e.target.closest("video") || e.target.querySelector?.("video");
+      if (!clickedVideo && !e.target.closest("figure, picture, img")) {
+        // Fallback: check if clicked element is a video slot/sibling
+        const block = e.target.closest('[data-testid="communities-block"], [data-testid="showcase-mosaic"], article, section');
+        if (block) {
+          const videos = Array.from(block.querySelectorAll("video"));
+          for (const v of videos) {
+            const vRect = v.getBoundingClientRect();
+            if (e.clientX >= vRect.left && e.clientX <= vRect.right && e.clientY >= vRect.top && e.clientY <= vRect.bottom) {
+              clickedVideo = v;
+              break;
+            }
+          }
+        }
+      }
+
+      if (clickedVideo && !e.target.closest("#visualEditorStudioBar") && !e.target.closest(".visual-editor-portal")) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        setSelectedShapeId(null);
+        setMultiSelectedElements([]);
+        activeTextRef.current = clickedVideo;
+        updateBoxRect(clickedVideo);
+        setTextPillBar((prev) => ({ ...prev, visible: false }));
+        return;
+      }
+
+      // Priority 3: Buttons, CTA links, and modal triggers (e.g. GET IN TOUCH button in navbar)
+      const actionBtn = e.target.closest("button, [role='button'], a, .hdr-cta, [data-testid*='cta'], [aria-haspopup='dialog']");
+      if (actionBtn && !actionBtn.closest("#visualEditorStudioBar") && !actionBtn.closest(".visual-editor-portal")) {
+        // DOUBLE CLICK: triggers live button action (e.g. opens modal or submits) just like on live site
+        if (e.detail >= 2) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          executeLiveElementAction(actionBtn);
+          return;
+        }
+
+        // SINGLE CLICK: Selects button in editor, shows highlight container & toolbar, PREVENTS modal/action
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        setSelectedShapeId(null);
+        setMultiSelectedElements([]);
+        activeTextRef.current = actionBtn;
+        enterTextEditing(actionBtn, e.clientX, e.clientY);
+
+        if (initialTextRef.current?.el !== actionBtn) {
+          initialTextRef.current = { el: actionBtn, html: actionBtn.innerHTML };
+        }
+
+        updateBoxRect(actionBtn, true);
+        updateActiveFormats(actionBtn);
+        return;
+      }
+
       const target = findEditableTextTarget(e.target);
       if (target) {
         setSelectedShapeId(null);
         setMultiSelectedElements([]);
-        if (target.tagName === "A" || target.closest("a") || target.tagName === "BUTTON") {
-          e.preventDefault();
-        }
 
-        const isAlreadySelected = activeTextRef.current === target;
-
-        if (isAlreadySelected) {
-          // Deliberate click on the text of the already selected box -> enter text editing mode
-          enterTextEditing(target, e.clientX, e.clientY);
-        } else {
-          // First click: select box object in mover mode (no cursor blink)
-          exitTextEditing();
-          target.contentEditable = "false";
-          activeTextRef.current = target;
-          setIsTextEditing(false);
-        }
+        activeTextRef.current = target;
+        enterTextEditing(target, e.clientX, e.clientY);
 
         if (initialTextRef.current?.el !== target) {
           initialTextRef.current = { el: target, html: target.innerHTML };
         }
 
-        updateBoxRect(target);
+        updateBoxRect(target, true);
         updateActiveFormats(target);
       } else {
         exitTextEditing();
@@ -1093,6 +1819,8 @@ export default function VisualEditor() {
     const handleScroll = () => {
       setHoveredDivider(null);
       setHoveredImage(null);
+      // Immediately dismiss context menu on scroll so hero video menu never follows down
+      setContextMenu((prev) => (prev.visible ? { visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false } : prev));
       if (activeTextRef.current) {
         const wrapper = activeTextRef.current.tagName === "IMG" ? getImgWrapper(activeTextRef.current) : null;
         updateBoxRect(wrapper || activeTextRef.current);
@@ -1109,12 +1837,55 @@ export default function VisualEditor() {
       const elementsAtPoint = Array.from(document.elementsFromPoint?.(e.clientX, e.clientY) || []);
       const layers = [];
 
-      // Smart Hero Banner Detection & Stacked Layer Arrangement (ONLY in Hero section)
-      const heroSection = document.querySelector("section:first-of-type, [data-testid='property-hero'], #property-hero-section, header + main > section:first-child");
-      const isInsideHero = heroSection && (heroSection.contains(e.target) || (heroSection.getBoundingClientRect().top <= e.clientY && heroSection.getBoundingClientRect().bottom >= e.clientY));
+      // Priority 1: Check for Direct Image Target FIRST (ensures property cards, figures, galleries open Image Menu)
+      let imgTarget = null;
+      if (e.target.tagName === "IMG") {
+        imgTarget = e.target;
+      } else if (e.target.closest("picture, figure, [data-testid*='card']")?.querySelector("img")) {
+        imgTarget = e.target.closest("picture, figure, [data-testid*='card']").querySelector("img");
+      } else if (e.target.querySelector("img") && !e.target.querySelector("video") && !e.target.closest("video")) {
+        imgTarget = e.target.querySelector("img");
+      } else if (activeTextRef.current?.tagName === "IMG" && activeTextRef.current.contains(e.target)) {
+        imgTarget = activeTextRef.current;
+      }
+
+      // Priority 2: Check for Video Target (e.g. CommunitiesCollage, ShowcaseMosaic, Hero, etc.)
+      let videoTarget = null;
+      if (!imgTarget) {
+        if (e.target.tagName === "VIDEO") {
+          videoTarget = e.target;
+        } else if (e.target.closest("video")) {
+          videoTarget = e.target.closest("video");
+        } else if (e.target.closest("#activeElementBoxOverlay") && activeTextRef.current?.tagName === "VIDEO") {
+          videoTarget = activeTextRef.current;
+        } else if (!e.target.closest("img, figure, picture")) {
+          const block = e.target.closest('[data-testid="communities-block"], [data-testid="showcase-mosaic"], article, section');
+          if (block) {
+            const videos = Array.from(block.querySelectorAll("video"));
+            for (const v of videos) {
+              const vRect = v.getBoundingClientRect();
+              if (e.clientX >= vRect.left && e.clientX <= vRect.right && e.clientY >= vRect.top && e.clientY <= vRect.bottom) {
+                videoTarget = v;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Priority 3: Smart Hero Banner Detection (STRICT: only when user is actually at the top in hero section)
+      const heroSection = document.querySelector("#top, [data-testid='property-hero'], #property-hero-section, header + main > section:first-child");
+      const isActuallyAtHeroTop = typeof window !== "undefined" && window.scrollY < 140;
+      const isInsideHero = Boolean(
+        !imgTarget &&
+        !videoTarget &&
+        isActuallyAtHeroTop &&
+        heroSection &&
+        heroSection.contains(e.target)
+      );
 
       if (isInsideHero) {
-        const heroVideo = heroSection.querySelector("video") || document.querySelector("video");
+        const heroVideo = heroSection.querySelector("video");
         const heroLayers = [];
 
         // Layer 1: Front-most interactive text, heading, or search control
@@ -1154,40 +1925,26 @@ export default function VisualEditor() {
         layers.push(...heroLayers);
       }
 
-      // Check if target or any layer element is an image, logo, or icon
-      let imgTarget = null;
-      if (e.target.tagName === "IMG") {
-        imgTarget = e.target;
-      } else if (e.target.closest("#activeElementBoxOverlay") && activeTextRef.current) {
-        imgTarget = activeTextRef.current.tagName === "IMG" ? activeTextRef.current : activeTextRef.current.querySelector("img");
-      }
-      if (!imgTarget) {
-        imgTarget = e.target.querySelector("img") || e.target.closest("a, button, div, figure, li")?.querySelector("img");
-      }
-      if (!imgTarget) {
-        for (const el of elementsAtPoint) {
-          if (el.closest("#visualEditorStudioBar") || el.id === "contextMenuPortal") continue;
-          if (el.tagName === "IMG") { imgTarget = el; break; }
-          const childImg = el.querySelector("img");
-          if (childImg) { imgTarget = childImg; break; }
-        }
-      }
-      if (!imgTarget && activeTextRef.current) {
-        imgTarget = activeTextRef.current.tagName === "IMG" ? activeTextRef.current : activeTextRef.current.querySelector("img");
-      }
-
+      // Determine dynamic menuMode
+      let menuMode = "layers";
       if (imgTarget) {
+        menuMode = "image";
         if (imgTarget.style.left && imgTarget.style.left !== "0px") imgTarget.style.left = "0px";
         if (imgTarget.style.top && imgTarget.style.top !== "0px") imgTarget.style.top = "0px";
         activeTextRef.current = imgTarget;
         const wrapper = getImgWrapper(imgTarget);
         updateBoxRect(wrapper || imgTarget);
+      } else if (videoTarget) {
+        menuMode = "video";
+        activeTextRef.current = videoTarget;
+        updateBoxRect(videoTarget);
+      } else {
+        menuMode = "layers";
       }
 
       let posX = e.clientX;
       let posY = e.clientY;
-      const menuWidth = 265;
-      const subflyoutWidth = 215;
+      const menuWidth = 220;
 
       // If menu would overflow right edge, position it safely
       if (posX + menuWidth > window.innerWidth - 10) {
@@ -1197,8 +1954,6 @@ export default function VisualEditor() {
         posY = Math.max(10, window.innerHeight - 270);
       }
 
-      const opensLeft = (posX + menuWidth + subflyoutWidth > window.innerWidth - 10);
-
       setTextPillBar((prev) => ({ ...prev, visible: false }));
       setContextMenu({
         visible: true,
@@ -1207,7 +1962,9 @@ export default function VisualEditor() {
         layers: isInsideHero ? layers : [],
         isHero: isInsideHero,
         imageTarget: imgTarget,
-        opensLeft
+        videoTarget: videoTarget,
+        menuMode,
+        opensLeft: false
       });
     };
 
@@ -1221,6 +1978,8 @@ export default function VisualEditor() {
       if (
         !e.target.closest("#activeElementBoxOverlay") &&
         !e.target.closest("#dynamicTextPillBar") &&
+        !e.target.closest("#linkPopoverWrapper") &&
+        !e.target.closest("#btnToggleLinkPopover") &&
         !e.target.closest("#visualEditorStudioBar") &&
         !e.target.closest(".visual-editor-portal") &&
         !findEditableTextTarget(e.target) &&
@@ -1231,9 +1990,22 @@ export default function VisualEditor() {
         setActiveBoxInfo(null);
         setTextPillBar((prev) => ({ ...prev, visible: false }));
         setMultiSelectedElements([]);
+        setLinkPopoverOpen(false);
+        setFontFamilyOpen(false);
+        setFontSizeOpen(false);
+        setEditorTooltip((prev) => (prev.visible ? { ...prev, visible: false } : prev));
       }
       if (!e.target.closest("#blockFormatDropdownWrapper")) {
         setBlockDropdownOpen(false);
+      }
+      if (!e.target.closest("#linkPopoverWrapper") && !e.target.closest("#btnToggleLinkPopover")) {
+        setLinkPopoverOpen(false);
+      }
+      if (!e.target.closest("#customFontFamilyWrapper")) {
+        setFontFamilyOpen(false);
+      }
+      if (!e.target.closest("#customFontSizeWrapper")) {
+        setFontSizeOpen(false);
       }
     };
 
@@ -1302,16 +2074,128 @@ export default function VisualEditor() {
         return;
       }
 
-      // Delete selected box, shape, or multi-selected area via keyboard Delete key
-      if (e.key === "Delete" && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA") {
-        if (multiSelectedElements && multiSelectedElements.length > 0) {
+      // Formatting Shortcuts: Ctrl+B (Bold), Ctrl+I (Italic), Ctrl+U (Underline)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === "b" && activeTextRef.current) {
           e.preventDefault();
+          applyFormat("bold");
+          return;
+        }
+        if (k === "i" && activeTextRef.current) {
+          e.preventDefault();
+          applyFormat("italic");
+          return;
+        }
+        if (k === "u" && activeTextRef.current) {
+          e.preventDefault();
+          applyFormat("underline");
+          return;
+        }
+      }
+
+      // Check if user has active text cursor/selection inside an editable element
+      const isRealInput = ["INPUT", "TEXTAREA"].includes(e.target.tagName) || Boolean(e.target.closest?.("input, textarea"));
+      if (isRealInput) {
+        return;
+      }
+
+      // Check if user is typing text with an active character range selection
+      const hasActiveCharSelection = Boolean(
+        document.activeElement &&
+        document.activeElement.isContentEditable &&
+        document.activeElement === activeTextRef.current &&
+        window.getSelection()?.rangeCount > 0 &&
+        !window.getSelection()?.getRangeAt(0)?.collapsed
+      );
+
+      // KEYBOARD DELETE: Deletes the selected container div / element / shape
+      if (e.key === "Delete") {
+        // If user highlighted specific text characters inside contenteditable, forward-delete the text characters
+        if (hasActiveCharSelection) {
+          e.preventDefault();
+          document.execCommand("delete", false, null);
+          if (activeTextRef.current) syncTextToCMS(activeTextRef.current);
+          return;
+        }
+
+        // 1. Multi-selected elements
+        const curMulti = multiSelectedElementsRef.current;
+        if (curMulti && curMulti.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
           handleDeleteMultiSelected();
           return;
         }
-        if (activeTextRef.current) {
+
+        // 2. Drawn canvas shapes
+        const curShapeId = selectedShapeIdRef.current;
+        if (curShapeId) {
           e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          const prevShapes = drawnShapesRef.current;
+          const deletedId = curShapeId;
+          const newShapes = prevShapes.filter((s) => s.id !== deletedId);
+          setDrawnShapes(newShapes);
+          setSelectedShapeId(null);
+          pushHistory({
+            desc: "Delete shape",
+            undo: () => setDrawnShapes(prevShapes),
+            redo: () => setDrawnShapes(newShapes)
+          });
+          showToast("Shape deleted. Press Ctrl+Z to undo.");
+          return;
+        }
+
+        // 3. Active container div / element on canvas
+        const targetToDelete =
+          activeTextRef.current ||
+          (activeBoxInfo?.el && document.body.contains(activeBoxInfo.el) ? activeBoxInfo.el : null) ||
+          (e.target?.closest?.("div, section, article, h1, h2, h3, h4, h5, h6, p, span, label, a, button, img, video, figure") && !e.target.closest("#visualEditorStudioBar, .visual-editor-portal")
+            ? e.target.closest("div, section, article, h1, h2, h3, h4, h5, h6, p, span, label, a, button, img, video, figure")
+            : null);
+
+        if (targetToDelete && targetToDelete !== document.body && targetToDelete !== document.documentElement) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          activeTextRef.current = targetToDelete;
           handleDeleteActiveElement();
+          return;
+        }
+      }
+
+      // Check if user is actively typing text for Backspace
+      const isEditableContext =
+        isTextEditing ||
+        e.target.isContentEditable ||
+        Boolean(e.target.closest?.('[contenteditable="true"]')) ||
+        (activeTextRef.current && activeTextRef.current.isContentEditable && (document.activeElement === activeTextRef.current || activeTextRef.current.contains(document.activeElement)));
+
+      if (isEditableContext && e.key === "Backspace") {
+        const isSpecialContainer =
+          e.target.tagName === "BUTTON" ||
+          e.target.closest("button") ||
+          activeTextRef.current?.tagName === "BUTTON" ||
+          e.target.tagName === "A" ||
+          e.target.closest("a") ||
+          activeTextRef.current?.tagName === "A";
+        if (isSpecialContainer) {
+          e.preventDefault();
+          document.execCommand("delete", false, null);
+          if (activeTextRef.current) syncTextToCMS(activeTextRef.current);
+          return;
+        }
+        return;
+      }
+
+      // Backspace key when NOT typing text: deletes the selected container div / element
+      if (e.key === "Backspace" && !isEditableContext) {
+        if (multiSelectedElements && multiSelectedElements.length > 0) {
+          e.preventDefault();
+          handleDeleteMultiSelected();
           return;
         }
         if (selectedShapeId) {
@@ -1326,36 +2210,16 @@ export default function VisualEditor() {
             undo: () => setDrawnShapes(prevShapes),
             redo: () => setDrawnShapes(newShapes)
           });
-          showToast("Shape deleted");
+          showToast("Shape deleted. Press Ctrl+Z to undo.");
           return;
         }
-      }
-
-      // Backspace: deletes box if not typing inside or if content is empty
-      if (e.key === "Backspace" && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA") {
-        if (multiSelectedElements && multiSelectedElements.length > 0 && !e.target.isContentEditable) {
+        const targetToDelete =
+          activeTextRef.current ||
+          (activeBoxInfo?.el && document.body.contains(activeBoxInfo.el) ? activeBoxInfo.el : null);
+        if (targetToDelete && targetToDelete !== document.body && targetToDelete !== document.documentElement) {
           e.preventDefault();
-          handleDeleteMultiSelected();
-          return;
-        }
-        if (activeTextRef.current && (!e.target.isContentEditable || activeTextRef.current.innerText.trim() === "")) {
-          e.preventDefault();
+          activeTextRef.current = targetToDelete;
           handleDeleteActiveElement();
-          return;
-        }
-        if (selectedShapeId && !e.target.isContentEditable) {
-          e.preventDefault();
-          const prevShapes = drawnShapesRef.current;
-          const deletedId = selectedShapeId;
-          const newShapes = prevShapes.filter((s) => s.id !== deletedId);
-          setDrawnShapes(newShapes);
-          setSelectedShapeId(null);
-          pushHistory({
-            desc: "Delete shape",
-            undo: () => setDrawnShapes(prevShapes),
-            redo: () => setDrawnShapes(newShapes)
-          });
-          showToast("Shape deleted");
           return;
         }
       }
@@ -1394,34 +2258,88 @@ export default function VisualEditor() {
       }
     };
 
-    // Intercept clicks on links in editor mode so clicking them enables text editing instead of navigating away (e.g. to 404)
+    // Intercept clicks on links in editor mode so clicking them enables text editing instead of navigating away (e.g. to 404 or tel: / mailto:)
     const handleLinkClickCapture = (e) => {
+      if (isExecutingLiveActionRef.current) return;
+      if (isWebsiteModalOpen() && e.target.closest('[data-testid="enquire-modal"], [data-testid="enquire-modal-scrim"], [data-testid="mobile-more-sheet"][data-open="true"]')) return;
       if (e.target.closest("#visualEditorStudioBar") || e.target.closest(".visual-editor-portal") || e.target.closest("#dynamicTextPillBar")) return;
       const link = e.target.closest("a");
       if (link && !link.closest("#visualEditorStudioBar") && !link.closest(".visual-editor-portal")) {
+        if (e.detail >= 2) {
+          e.preventDefault();
+          e.stopPropagation();
+          executeLiveElementAction(link);
+          return;
+        }
         e.preventDefault();
       }
     };
 
+    // Double-click capture listener for instant live action triggering on buttons & links
+    const handleDblClickCapture = (e) => {
+      if (isExecutingLiveActionRef.current) return;
+      if (isWebsiteModalOpen() && e.target.closest('[data-testid="enquire-modal"], [data-testid="enquire-modal-scrim"], [data-testid="mobile-more-sheet"][data-open="true"]')) return;
+      if (e.target.closest("#visualEditorStudioBar") || e.target.closest(".visual-editor-portal") || e.target.closest("#dynamicTextPillBar")) return;
+      if (e.target.closest('[data-testid="home-search-filter-trigger"], [data-testid*="adv-filters"]')) return;
+      const btn = e.target.closest("button, [role='button'], a, .hdr-cta, [data-testid*='cta'], [aria-haspopup='dialog']");
+      if (btn) {
+        e.preventDefault();
+        e.stopPropagation();
+        executeLiveElementAction(btn);
+      }
+    };
+
+    // Auto-detect when website modals open (e.g. Enquiry modal) to dismiss editor bounding boxes & toolbars
+    const modalObserver = new MutationObserver(() => {
+      if (isWebsiteModalOpen()) {
+        setActiveBoxInfo(null);
+        setTextPillBar((prev) => ({ ...prev, visible: false }));
+        if (activeTextRef.current) {
+          exitTextEditing();
+          activeTextRef.current = null;
+        }
+      } else if (activeTextRef.current && !document.body.contains(activeTextRef.current)) {
+        // Automatically dismiss box and toolbar if the selected element leaves the DOM (e.g. dropdown menu closes)
+        setActiveBoxInfo(null);
+        setTextPillBar((prev) => ({ ...prev, visible: false }));
+        activeTextRef.current = null;
+      }
+    });
+    modalObserver.observe(document.body, { childList: true, subtree: true });
+
+    // Dismiss context menu immediately the moment user clicks or presses outside it
+    const handleDismissContextMenu = (e) => {
+      if (!e.target.closest("#contextMenuPortal")) {
+        setContextMenu((prev) => (prev.visible ? { visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false } : prev));
+      }
+    };
+
+    document.addEventListener("pointerdown", handleDismissContextMenu, true);
+    document.addEventListener("click", handleDismissContextMenu, true);
     document.addEventListener("click", handleLinkClickCapture, true);
+    document.addEventListener("dblclick", handleDblClickCapture, true);
     document.addEventListener("click", handleImageClick, true);
     document.addEventListener("click", handleTextClick, true);
     document.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("click", handleClickOutside);
     document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown, true);
     document.addEventListener("selectionchange", handleSelectionChange);
     document.addEventListener("input", handleDocumentInput);
 
     return () => {
+      modalObserver.disconnect();
+      document.removeEventListener("pointerdown", handleDismissContextMenu, true);
+      document.removeEventListener("click", handleDismissContextMenu, true);
       document.removeEventListener("click", handleLinkClickCapture, true);
+      document.removeEventListener("dblclick", handleDblClickCapture, true);
       document.removeEventListener("click", handleImageClick, true);
       document.removeEventListener("click", handleTextClick, true);
       document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("click", handleClickOutside);
       document.removeEventListener("mouseover", handleMouseOver);
       document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown, true);
       document.removeEventListener("selectionchange", handleSelectionChange);
       document.removeEventListener("input", handleDocumentInput);
       window.removeEventListener("scroll", handleScroll, true);
@@ -2164,10 +3082,8 @@ export default function VisualEditor() {
     if (delBtn) {
       delBtn.onclick = (e) => {
         e.stopPropagation();
-        if (confirm("Are you sure you want to remove this section?")) {
-          newSec.remove();
-          showToast("Section removed");
-        }
+        newSec.remove();
+        showToast("Section removed");
       };
     }
 
@@ -2574,10 +3490,10 @@ export default function VisualEditor() {
       // Blank Section
       const html = `
         <div style="max-width: 800px; margin: 0 auto; width: 100%; text-align: center; padding: 80px 24px;">
-          <h2 contenteditable="true" style="font-size: 32px; font-weight: 300; letter-spacing: 0.04em; color: #0f172a; margin-bottom: 14px; outline: none; font-family: 'Playfair Display', Georgia, serif;">
+          <h2 style="font-size: 32px; font-weight: 300; letter-spacing: 0.04em; color: #0f172a; margin-bottom: 14px; outline: none; font-family: 'Playfair Display', Georgia, serif;">
             New Section Title
           </h2>
-          <p contenteditable="true" style="font-size: 15px; color: #64748b; line-height: 1.7; outline: none; font-family: system-ui, sans-serif; max-width: 580px; margin: 0 auto;">
+          <p style="font-size: 15px; color: #64748b; line-height: 1.7; outline: none; font-family: system-ui, sans-serif; max-width: 580px; margin: 0 auto;">
             This is an empty section. Click here to edit this text, or use the <strong>Tt</strong> and <strong>Image</strong> tools in the studio bar to draw text and image shapes anywhere in this space.
           </p>
         </div>
@@ -2590,17 +3506,22 @@ export default function VisualEditor() {
     setSectionModalOpen(true);
   };
 
-  // Fetch Media Library
+  // Fetch Media Library (Images & Videos)
   const fetchMedia = async () => {
     try {
       const res = await fetch("http://localhost:5000/api/media");
       const data = await res.json();
       const files = Array.isArray(data.data) ? data.data : (Array.isArray(data.files) ? data.files : []);
-      if (files.length > 0) {
-        setMediaFiles(files);
-      }
+      const merged = [...files];
+      [...LIVE_WEBSITE_IMAGES, ...LIVE_WEBSITE_VIDEOS].forEach((item) => {
+        if (!merged.some((m) => m.url === item.url || m.name === item.name)) {
+          merged.push(item);
+        }
+      });
+      setMediaFiles(merged);
     } catch (e) {
       console.error(e);
+      setMediaFiles([...LIVE_WEBSITE_IMAGES, ...LIVE_WEBSITE_VIDEOS]);
     }
   };
 
@@ -2623,17 +3544,24 @@ export default function VisualEditor() {
           setSelectedMedia({ url: data.url, name: data.filename || file.name });
         }
       } else {
-        alert(data.message || "Upload failed");
+        showToast(data.message || "Upload failed");
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to upload file");
+      showToast("Failed to upload file");
     }
   };
 
   const handleOpenMediaPicker = (layer) => {
     setSelectedLayer(layer);
     setContextMenu({ visible: false, x: 0, y: 0, layers: [] });
+    if (layer?.el?.tagName === "IMG") {
+      setMediaLibraryTab("images");
+    } else if (layer?.el?.tagName === "VIDEO") {
+      setMediaLibraryTab("videos");
+    } else {
+      setMediaLibraryTab("all");
+    }
     fetchMedia();
     setMediaPickerOpen(true);
   };
@@ -2641,15 +3569,24 @@ export default function VisualEditor() {
   const handleApplyMedia = async () => {
     if (!selectedMedia || !selectedLayer?.el) return;
     const el = selectedLayer.el;
+    const isVideoFile = /\.(mp4|webm|ogg)$/i.test(selectedMedia.url);
 
     if (el.tagName === "VIDEO") {
+      if (!isVideoFile) {
+        showToast("⚠️ Please select a video file (.mp4, .webm) for video players.");
+        return;
+      }
       el.src = selectedMedia.url;
       const source = el.querySelector("source");
       if (source) source.src = selectedMedia.url;
       el.load();
       el.play?.().catch(() => {});
-      showToast("Hero video replaced successfully!");
+      showToast("Video replaced successfully!");
     } else if (el.tagName === "IMG") {
+      if (isVideoFile) {
+        showToast("⚠️ Cannot set a video on an image element. Please select an image.");
+        return;
+      }
       el.src = selectedMedia.url;
       if (el.srcset) el.removeAttribute("srcset");
       const isLogo = el.closest("header, nav") || el.alt?.toLowerCase().includes("logo") || el.src?.includes("logo");
@@ -2679,14 +3616,16 @@ export default function VisualEditor() {
     setMediaPickerOpen(false);
   };
 
-  const handleOpenCrop = (layer) => {
+  const handleOpenCrop = (layer, initialTab = "main") => {
     setSelectedLayer(layer);
     setContextMenu({ visible: false, x: 0, y: 0, layers: [] });
     let initScale = 100;
     let initX = 50;
     let initY = 50;
     let initFit = "cover";
+    let initSrc = "";
     if (layer?.el) {
+      initSrc = layer.el.src || layer.el.currentSrc || layer.el.getAttribute?.("src") || "";
       if (layer.el.style.objectFit) {
         initFit = layer.el.style.objectFit;
       }
@@ -2707,22 +3646,149 @@ export default function VisualEditor() {
         }
       }
     }
+    setCropImgSrc(initSrc);
     setCropScale(initScale);
     setCropPosX(initX);
     setCropPosY(initY);
     setCropFit(initFit);
+    setCropModalTab(initialTab);
+    fetchMedia();
     setCropModalOpen(true);
   };
 
   const handleApplyCrop = () => {
     if (selectedLayer?.el) {
       const el = selectedLayer.el;
+      if (cropImgSrc && cropImgSrc !== el.src) {
+        el.src = cropImgSrc;
+        if (el.srcset) el.removeAttribute("srcset");
+      }
       el.style.objectFit = cropFit;
       el.style.objectPosition = `${cropPosX}% ${cropPosY}%`;
       el.style.transform = `scale(${cropScale / 100})`;
-      showToast("Crop and framing boundaries applied!");
+      showToast("Photo framing & source applied!");
+      syncTextToCMS(el);
     }
     setCropModalOpen(false);
+  };
+
+  const handleOpenVideoModal = (targetVid, initialTab = "framing") => {
+    const vid = targetVid || document.querySelector("video");
+    if (!vid) {
+      showToast("No video element found");
+      return;
+    }
+    setVideoTargetEl(vid);
+    setVideoModalTab(initialTab);
+
+    const currentSrc = vid.currentSrc || vid.src || vid.querySelector("source")?.src || "";
+    let initFit = vid.style.objectFit || "cover";
+    let initScale = 100;
+    let initX = 50;
+    let initY = 50;
+
+    if (vid.style.objectPosition) {
+      const parts = vid.style.objectPosition.split(" ");
+      if (parts.length >= 2) {
+        const px = parseFloat(parts[0]);
+        const py = parseFloat(parts[1]);
+        if (!isNaN(px)) initX = Math.round(px);
+        if (!isNaN(py)) initY = Math.round(py);
+      }
+    }
+    if (vid.style.transform) {
+      const m = vid.style.transform.match(/scale\(([^)]+)\)/);
+      if (m && m[1]) {
+        const s = parseFloat(m[1]);
+        if (!isNaN(s)) initScale = Math.round(s * 100);
+      }
+    }
+
+    setVideoState({
+      src: currentSrc,
+      fit: initFit,
+      scale: initScale,
+      posX: initX,
+      posY: initY,
+      speed: vid.playbackRate || 1,
+      loop: vid.loop !== false,
+      autoplay: vid.autoplay !== false,
+      muted: vid.muted !== false
+    });
+    fetchMedia();
+    setVideoModalTab("main");
+    setVideoModalOpen(true);
+  };
+
+  const handleApplyVideoChanges = async () => {
+    if (!videoTargetEl) return;
+    const target = videoTargetEl;
+    const isImageSource = /\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i.test(videoState.src) || videoState.src?.startsWith("data:image/");
+
+    if (isImageSource && target.tagName === "VIDEO") {
+      // User replaced video with an image! Convert to <img>
+      const img = document.createElement("img");
+      img.src = videoState.src;
+      img.alt = target.getAttribute("aria-label") || target.title || "Visual Asset";
+      img.className = target.className;
+      img.style.cssText = target.style.cssText;
+      img.style.objectFit = videoState.fit;
+      img.style.objectPosition = `${videoState.posX}% ${videoState.posY}%`;
+      img.style.transform = `scale(${videoState.scale / 100})`;
+      if (target.parentNode) {
+        target.parentNode.replaceChild(img, target);
+      }
+      activeTextRef.current = img;
+      updateBoxRect(img);
+      syncTextToCMS(img);
+    } else if (!isImageSource && target.tagName === "IMG") {
+      // User replaced image with a video! Convert to <video>
+      const vid = document.createElement("video");
+      vid.src = videoState.src;
+      vid.className = target.className;
+      vid.style.cssText = target.style.cssText;
+      vid.style.objectFit = videoState.fit;
+      vid.style.objectPosition = `${videoState.posX}% ${videoState.posY}%`;
+      vid.style.transform = `scale(${videoState.scale / 100})`;
+      vid.playbackRate = videoState.speed;
+      vid.loop = videoState.loop;
+      vid.autoplay = videoState.autoplay;
+      vid.muted = videoState.muted;
+      vid.playsInline = true;
+      if (target.parentNode) {
+        target.parentNode.replaceChild(vid, target);
+      }
+      activeTextRef.current = vid;
+      updateBoxRect(vid);
+      syncTextToCMS(vid);
+    } else {
+      target.style.objectFit = videoState.fit;
+      target.style.objectPosition = `${videoState.posX}% ${videoState.posY}%`;
+      target.style.transform = `scale(${videoState.scale / 100})`;
+      if (target.tagName === "VIDEO") {
+        target.playbackRate = videoState.speed;
+        target.loop = videoState.loop;
+        target.autoplay = videoState.autoplay;
+        target.muted = videoState.muted;
+        if (videoState.src && videoState.src !== (target.currentSrc || target.src)) {
+          target.src = videoState.src;
+          const srcEl = target.querySelector("source");
+          if (srcEl) srcEl.src = videoState.src;
+          target.load();
+          target.play().catch(() => {});
+        }
+      } else if (target.tagName === "IMG") {
+        if (videoState.src) target.src = videoState.src;
+      }
+      syncTextToCMS(target);
+    }
+
+    try {
+      await handleSaveStaged(true);
+    } catch (e) {}
+
+    showToast("✓ Media updated and changes saved!");
+    setVideoModalOpen(false);
   };
 
   const handleOpenCode = (layer) => {
@@ -2874,6 +3940,162 @@ export default function VisualEditor() {
   };
 
   // Text Pill Formatting Helpers
+  // Universal Inline Selection Styler: applies styling strictly to selected text range, never whole div!
+  const applyInlineFormatting = (target, type, value = null) => {
+    if (!target) return false;
+
+    let range = null;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed && sel.toString().trim().length > 0) {
+      range = sel.getRangeAt(0);
+    } else if (
+      savedSelectionRangeRef.current &&
+      !savedSelectionRangeRef.current.collapsed &&
+      savedSelectionRangeRef.current.toString().trim().length > 0
+    ) {
+      range = savedSelectionRangeRef.current;
+    }
+
+    if (!range || range.collapsed) {
+      return false; // No text selection present, caller will format target block
+    }
+
+    try {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) {}
+
+    const selectedText = range.toString();
+    if (!selectedText || selectedText.trim().length === 0) {
+      return false;
+    }
+
+    const common = range.commonAncestorContainer;
+    const parentEl = common.nodeType === Node.TEXT_NODE ? common.parentElement : common;
+    const comp = window.getComputedStyle(parentEl || target);
+
+    let propName = "";
+    let newVal = "";
+    let isTogglingOff = false;
+
+    if (type === "bold") {
+      propName = "font-weight";
+      const isBold = comp.fontWeight === "bold" || parseInt(comp.fontWeight, 10) >= 600;
+      isTogglingOff = isBold;
+      newVal = isBold ? "400" : "700";
+    } else if (type === "italic") {
+      propName = "font-style";
+      const isItalic = comp.fontStyle === "italic";
+      isTogglingOff = isItalic;
+      newVal = isItalic ? "normal" : "italic";
+    } else if (type === "underline") {
+      propName = "text-decoration";
+      const isUnderline = (comp.textDecorationLine || comp.textDecoration || "").includes("underline");
+      isTogglingOff = isUnderline;
+      newVal = isUnderline ? "none" : "underline";
+    } else if (type === "strikeThrough") {
+      propName = "text-decoration";
+      const isStrike = (comp.textDecorationLine || comp.textDecoration || "").includes("line-through");
+      isTogglingOff = isStrike;
+      newVal = isStrike ? "none" : "line-through";
+    } else if (type === "foreColor") {
+      propName = "color";
+      newVal = value;
+    } else if (type === "fontFamily") {
+      propName = "font-family";
+      newVal = value;
+    } else if (type === "removeFormat") {
+      const spans = Array.from(target.querySelectorAll("span")).filter(
+        (s) => range.intersectsNode ? range.intersectsNode(s) : (target.contains(s) && range.toString().includes(s.textContent.trim()))
+      );
+      spans.forEach((s) => {
+        s.style.removeProperty("font-weight");
+        s.style.removeProperty("font-style");
+        s.style.removeProperty("text-decoration");
+        s.style.removeProperty("color");
+        s.style.removeProperty("font-family");
+        s.style.removeProperty("font-size");
+        if (!s.getAttribute("style") || s.style.length === 0) {
+          const p = s.parentNode;
+          while (s.firstChild) p.insertBefore(s.firstChild, s);
+          p.removeChild(s);
+        }
+      });
+      return true;
+    }
+
+    if (!propName) return false;
+
+    // Check if the selection exactly matches a child SPAN inside target
+    let matchedSpan = null;
+    if (parentEl && parentEl.tagName === "SPAN" && parentEl !== target && target.contains(parentEl)) {
+      if (parentEl.textContent.trim() === selectedText.trim()) {
+        matchedSpan = parentEl;
+      }
+    }
+
+    if (!matchedSpan) {
+      const spans = target.querySelectorAll("span");
+      for (const s of spans) {
+        if (s.textContent.trim() === selectedText.trim() && (range.intersectsNode ? range.intersectsNode(s) : true)) {
+          matchedSpan = s;
+          break;
+        }
+      }
+    }
+
+    if (matchedSpan) {
+      if (isTogglingOff) {
+        matchedSpan.style.removeProperty(propName);
+        if (propName === "font-weight") matchedSpan.style.setProperty("font-weight", "400", "important");
+        if (propName === "font-style") matchedSpan.style.setProperty("font-style", "normal", "important");
+        if (propName === "text-decoration") matchedSpan.style.setProperty("text-decoration", "none", "important");
+
+        if (
+          !matchedSpan.style.fontFamily &&
+          !matchedSpan.style.fontSize &&
+          !matchedSpan.style.color &&
+          (matchedSpan.style.fontWeight === "400" || !matchedSpan.style.fontWeight) &&
+          (matchedSpan.style.fontStyle === "normal" || !matchedSpan.style.fontStyle) &&
+          (matchedSpan.style.textDecoration === "none" || !matchedSpan.style.textDecoration)
+        ) {
+          const p = matchedSpan.parentNode;
+          while (matchedSpan.firstChild) p.insertBefore(matchedSpan.firstChild, matchedSpan);
+          p.removeChild(matchedSpan);
+        }
+      } else {
+        matchedSpan.style.setProperty(propName, newVal, "important");
+      }
+      try {
+        const newRange = document.createRange();
+        newRange.selectNodeContents(matchedSpan);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+        savedSelectionRangeRef.current = newRange.cloneRange();
+      } catch (e) {}
+    } else {
+      // Wrap extracted selection inside a dedicated span
+      try {
+        const extracted = range.extractContents();
+        const span = document.createElement("span");
+        span.style.setProperty(propName, newVal, "important");
+        span.appendChild(extracted);
+        range.insertNode(span);
+
+        const newRange = document.createRange();
+        newRange.selectNodeContents(span);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+        savedSelectionRangeRef.current = newRange.cloneRange();
+      } catch (err) {
+        console.warn("extractContents wrap failed:", err);
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   const applyFormat = (command, value = null) => {
     setBlockDropdownOpen(false);
     if (!activeTextRef.current) return;
@@ -2882,18 +4104,9 @@ export default function VisualEditor() {
     const prevCssText = target.style.cssText;
 
     if (command === "foreColor") {
-      const selection = window.getSelection();
-      const hasSelection = selection && !selection.isCollapsed && target.contains(selection.anchorNode);
-
-      if (hasSelection) {
-        document.execCommand("styleWithCSS", false, true);
-        document.execCommand("foreColor", false, value);
-      } else {
+      const handled = applyInlineFormatting(target, "foreColor", value);
+      if (!handled) {
         target.style.setProperty("color", value, "important");
-        const children = target.querySelectorAll("span, p, a, div, h1, h2, h3, h4, h5, h6, button, b, strong, i, em");
-        children.forEach((c) => {
-          c.style.setProperty("color", value, "important");
-        });
       }
       setActiveFormats((prev) => ({ ...prev, color: value }));
       showToast(`Text color updated to ${value}`);
@@ -3061,117 +4274,40 @@ export default function VisualEditor() {
     }
 
     // Bold, Italic, Underline, Strikethrough
-    if (command === "bold") {
+    if (command === "bold" || command === "italic" || command === "underline" || command === "strikeThrough") {
+      const handled = applyInlineFormatting(target, command, value);
       const comp = window.getComputedStyle(target);
-      const isCurrentlyBold = comp.fontWeight === "bold" || parseInt(comp.fontWeight, 10) >= 600;
-      const newVal = isCurrentlyBold ? "400" : "700";
 
-      const sel = window.getSelection();
-      const hasSubSelection = sel && !sel.isCollapsed && target.contains(sel.anchorNode);
-      if (hasSubSelection) {
-        document.execCommand("bold", false, null);
-      } else {
-        target.style.setProperty("font-weight", newVal, "important");
-        target.querySelectorAll("*").forEach((c) => c.style.setProperty("font-weight", newVal, "important"));
-      }
-      setActiveFormats((prev) => ({ ...prev, bold: !isCurrentlyBold }));
-      syncTextToCMS(target);
-
-      const nextInnerHTML = target.innerHTML;
-      const nextCssText = target.style.cssText;
-      pushHistory({
-        desc: isCurrentlyBold ? "Normal font" : "Bold font",
-        undo: () => {
-          target.innerHTML = prevInnerHTML;
-          target.style.cssText = prevCssText;
-          activeTextRef.current = target;
-          syncTextToCMS(target);
-        },
-        redo: () => {
-          target.innerHTML = nextInnerHTML;
-          target.style.cssText = nextCssText;
-          activeTextRef.current = target;
-          syncTextToCMS(target);
+      if (!handled) {
+        // Fallback: Format whole block ONLY when user has NOT selected specific text
+        if (command === "bold") {
+          const isCurrentlyBold = comp.fontWeight === "bold" || parseInt(comp.fontWeight, 10) >= 600;
+          const newVal = isCurrentlyBold ? "400" : "700";
+          target.style.setProperty("font-weight", newVal, "important");
+          setActiveFormats((prev) => ({ ...prev, bold: !isCurrentlyBold }));
+        } else if (command === "italic") {
+          const isCurrentlyItalic = comp.fontStyle === "italic";
+          const newVal = isCurrentlyItalic ? "normal" : "italic";
+          target.style.setProperty("font-style", newVal, "important");
+          setActiveFormats((prev) => ({ ...prev, italic: !isCurrentlyItalic }));
+        } else if (command === "underline" || command === "strikeThrough") {
+          const curDec = (comp.textDecorationLine || comp.textDecoration || "").toLowerCase();
+          const currentUnderline = curDec.includes("underline");
+          const currentStrike = curDec.includes("line-through");
+          const nextUnderline = command === "underline" ? !currentUnderline : currentUnderline;
+          const nextStrike = command === "strikeThrough" ? !currentStrike : currentStrike;
+          const parts = [];
+          if (nextUnderline) parts.push("underline");
+          if (nextStrike) parts.push("line-through");
+          const combinedVal = parts.length > 0 ? parts.join(" ") : "none";
+          target.style.setProperty("text-decoration-line", combinedVal, "important");
+          target.style.setProperty("text-decoration", combinedVal, "important");
+          setActiveFormats((prev) => ({ ...prev, underline: nextUnderline, strikeThrough: nextStrike }));
         }
-      });
-      return;
-    }
-
-    if (command === "italic") {
-      const comp = window.getComputedStyle(target);
-      const isCurrentlyItalic = comp.fontStyle === "italic";
-      const newVal = isCurrentlyItalic ? "normal" : "italic";
-
-      const sel = window.getSelection();
-      const hasSubSelection = sel && !sel.isCollapsed && target.contains(sel.anchorNode);
-      if (hasSubSelection) {
-        document.execCommand("italic", false, null);
       } else {
-        target.style.setProperty("font-style", newVal, "important");
-        target.querySelectorAll("*").forEach((c) => c.style.setProperty("font-style", newVal, "important"));
-      }
-      setActiveFormats((prev) => ({ ...prev, italic: !isCurrentlyItalic }));
-      syncTextToCMS(target);
-
-      const nextInnerHTML = target.innerHTML;
-      const nextCssText = target.style.cssText;
-      pushHistory({
-        desc: isCurrentlyItalic ? "Normal font" : "Italic font",
-        undo: () => {
-          target.innerHTML = prevInnerHTML;
-          target.style.cssText = prevCssText;
-          activeTextRef.current = target;
-          syncTextToCMS(target);
-        },
-        redo: () => {
-          target.innerHTML = nextInnerHTML;
-          target.style.cssText = nextCssText;
-          activeTextRef.current = target;
-          syncTextToCMS(target);
-        }
-      });
-      return;
-    }
-
-    if (command === "underline" || command === "strikeThrough") {
-      const comp = window.getComputedStyle(target);
-      const curDec = (comp.textDecorationLine || comp.textDecoration || "").toLowerCase();
-      const currentUnderline = curDec.includes("underline");
-      const currentStrike = curDec.includes("line-through");
-
-      let nextUnderline = currentUnderline;
-      let nextStrike = currentStrike;
-
-      if (command === "underline") {
-        nextUnderline = !currentUnderline;
-      } else {
-        nextStrike = !currentStrike;
+        updateActiveFormats(target);
       }
 
-      // Build combined CSS text-decoration value
-      const parts = [];
-      if (nextUnderline) parts.push("underline");
-      if (nextStrike) parts.push("line-through");
-      const combinedVal = parts.length > 0 ? parts.join(" ") : "none";
-
-      const sel = window.getSelection();
-      const hasSubSelection = sel && !sel.isCollapsed && target.contains(sel.anchorNode);
-      if (hasSubSelection) {
-        document.execCommand(command, false, null);
-      } else {
-        target.style.setProperty("text-decoration-line", combinedVal, "important");
-        target.style.setProperty("text-decoration", combinedVal, "important");
-        target.querySelectorAll("*").forEach((c) => {
-          c.style.setProperty("text-decoration-line", combinedVal, "important");
-          c.style.setProperty("text-decoration", combinedVal, "important");
-        });
-      }
-
-      setActiveFormats((prev) => ({
-        ...prev,
-        underline: nextUnderline,
-        strikeThrough: nextStrike
-      }));
       syncTextToCMS(target);
 
       const nextInnerHTML = target.innerHTML;
@@ -3204,6 +4340,43 @@ export default function VisualEditor() {
   const handleSaveTextPill = async () => {
     if (!activeTextRef.current) return;
     syncTextToCMS(activeTextRef.current);
+  };
+
+  const handleApplyHyperlink = (url) => {
+    if (!activeTextRef.current) return;
+    const target = activeTextRef.current;
+    if (!url || url.trim() === "") {
+      document.execCommand("unlink", false, null);
+      if (target.tagName === "A") {
+        target.removeAttribute("href");
+        delete target.dataset?.cmsOrigHref;
+      }
+      showToast("Link removed");
+    } else {
+      const cleanUrl = url.trim();
+      const sel = window.getSelection();
+      if (savedSelectionRangeRef.current) {
+        try {
+          sel.removeAllRanges();
+          sel.addRange(savedSelectionRangeRef.current);
+        } catch (e) {}
+      }
+      if (sel && sel.rangeCount > 0 && !sel.isCollapsed && target.contains(sel.anchorNode)) {
+        document.execCommand("createLink", false, cleanUrl);
+      } else if (target.tagName === "A") {
+        target.dataset.cmsOrigHref = cleanUrl;
+        target.setAttribute("href", cleanUrl);
+      } else {
+        const a = document.createElement("a");
+        a.href = cleanUrl;
+        a.innerHTML = target.innerHTML;
+        target.innerHTML = "";
+        target.appendChild(a);
+      }
+      showToast("✓ Link applied");
+    }
+    syncTextToCMS(target);
+    setLinkPopoverOpen(false);
   };
 
   // Add Custom Draggable/Resizable Slot
@@ -3321,7 +4494,9 @@ export default function VisualEditor() {
       const customAddedEls = Array.from(document.querySelectorAll(".custom-added-section"));
       const customSections = customAddedEls.map((sec, idx) => ({
         id: "custom-sec-" + (idx + 1),
-        html: sec.innerHTML.replace(/<div style="position: absolute; top: 14px; right: 24px[\s\S]*?<\/div>/, ""),
+        html: sec.innerHTML
+          .replace(/<div style="position: absolute; top: 14px; right: 24px[\s\S]*?<\/div>/, "")
+          .replace(/\s*contenteditable=(["'])?(?:true|false)\1/gi, ""),
         title: sec.querySelector("h2")?.innerText.trim() || "",
         content: sec.querySelector("p")?.innerText.trim() || ""
       }));
@@ -3473,29 +4648,129 @@ export default function VisualEditor() {
 
   return (
     <div className="visual-editor-portal">
-      {/* Push website header, sidebar drawer, and body down so nothing overlaps with the studio bar */}
+      {/* Studio Bar scoped styling */}
       <style>{`
-        header.fixed,
-        header[class*="fixed"],
-        header {
-          top: 48px !important;
+        body.cms-editor-active {
+          --hdr-top: 48px;
+          -webkit-user-select: none !important;
+          -moz-user-select: none !important;
+          user-select: none !important;
         }
-        aside.fixed {
-          top: 48px !important;
-          height: calc(100vh - 48px) !important;
-          transition: top 0.2s ease, transform 0.5s ease-in-out !important;
-        }
-        header ~ div.fixed.inset-0,
-        .fixed.inset-0:not(.visual-editor-portal *) {
-          top: 48px !important;
-          height: calc(100vh - 48px) !important;
-        }
-        body {
-          padding-top: 48px !important;
+        body.cms-editor-active [contenteditable="true"],
+        body.cms-editor-active [contenteditable="true"] *,
+        body.cms-editor-active input,
+        body.cms-editor-active textarea,
+        body.cms-editor-active select,
+        body.cms-editor-active [data-cms-allow-select="true"],
+        body.cms-editor-active [data-cms-allow-select="true"] * {
+          -webkit-user-select: text !important;
+          -moz-user-select: text !important;
+          user-select: text !important;
         }
         [contenteditable="true"]:focus,
         [contenteditable="true"] {
           outline: none !important;
+        }
+        .word-ribbon-toolbar {
+          user-select: none;
+          animation: editorToolbarFadeIn 0.1s ease-out;
+        }
+        @keyframes editorToolbarFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .word-toolbar-group {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          padding-right: 6px;
+          margin-right: 4px;
+          border-right: 1px solid #e2e8f0;
+        }
+        .word-tool-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          border-radius: 4px;
+          border: 1px solid transparent;
+          background: transparent;
+          color: #334155;
+          font-size: 13px;
+          cursor: pointer;
+          transition: all 0.12s ease;
+          padding: 0;
+        }
+        .word-tool-btn:hover {
+          background: #e2e8f0;
+          color: #0f172a;
+        }
+        .word-tool-btn.active {
+          background: linear-gradient(180deg, #27272a 0%, #09090b 100%);
+          color: #ffffff;
+          box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.65), 0 1px 2.5px rgba(0, 0, 0, 0.28);
+          border: 1px solid #18181b;
+          transform: translateY(0.5px);
+        }
+        .word-tool-select {
+          height: 28px;
+          padding: 0 22px 0 8px;
+          border-radius: 5px;
+          border: 1px solid #cbd5e1;
+          background-color: #ffffff;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 6px center;
+          background-size: 9px 9px;
+          color: #1e293b;
+          font-size: 11.5px;
+          font-weight: 600;
+          cursor: pointer;
+          outline: none;
+          appearance: none;
+          -webkit-appearance: none;
+        }
+        .word-tool-select:hover {
+          border-color: #94a3b8;
+          background-color: #f8fafc;
+        }
+        .word-tool-select:focus {
+          border-color: #2563eb;
+          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+        }
+        .word-color-btn {
+          position: relative;
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          border-radius: 4px;
+          cursor: pointer;
+          border: 1px solid transparent;
+          background: transparent;
+        }
+        .word-color-btn:hover {
+          background: #e2e8f0;
+        }
+        .word-color-btn input[type="color"] {
+          position: absolute;
+          opacity: 0;
+          width: 100%;
+          height: 100%;
+          top: 0;
+          left: 0;
+          cursor: pointer;
+        }
+        .color-bar-indicator {
+          width: 14px;
+          height: 3px;
+          border-radius: 1.5px;
+          background: #111111;
+          margin-top: 1px;
+          box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28);
         }
       `}</style>
 
@@ -3792,7 +5067,7 @@ export default function VisualEditor() {
             )}
           </button>
           <a
-            href="http://localhost:5000/"
+            href="/admin"
             style={{ background: "#27272a", border: "1px solid #3f3f46", color: "#fafafa", padding: "6px 12px", borderRadius: "6px", textDecoration: "none", fontSize: "12px", fontWeight: "500" }}
           >
             Back to CMS
@@ -3800,7 +5075,7 @@ export default function VisualEditor() {
         </div>
       </div>
 
-      {/* 2. RIGHT-CLICK ACTION MENU (CLEAN, DIRECT & NO OVERLAPPING FLYOUTS) */}
+      {/* 2. RIGHT-CLICK ACTION MENU (COMPACT, DYNAMIC & CONTEXT-AWARE) */}
       {contextMenu.visible && (
         <div
           id="contextMenuPortal"
@@ -3808,13 +5083,13 @@ export default function VisualEditor() {
             position: "fixed",
             left: `${contextMenu.x}px`,
             top: `${contextMenu.y}px`,
-            width: "250px",
+            width: "215px",
             background: "#ffffff",
             border: "1px solid #e2e8f0",
             borderRadius: "10px",
             boxShadow: "0 14px 34px rgba(0,0,0,0.18), 0 3px 10px rgba(0,0,0,0.06)",
             zIndex: 2000000,
-            padding: "6px",
+            padding: "5px",
             boxSizing: "border-box",
             fontSize: "12px",
             color: "#0f172a",
@@ -3822,365 +5097,402 @@ export default function VisualEditor() {
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-            {/* STACKED LAYERS DETECTED AT CURSOR (HERO SECTION ONLY) */}
-            {contextMenu.isHero && contextMenu.layers && contextMenu.layers.length > 0 && (
-              <div style={{ borderBottom: "1px solid #f1f5f9", paddingBottom: "6px", marginBottom: "6px" }}>
-                <div style={{ fontSize: "10px", fontWeight: "700", textTransform: "uppercase", color: "#64748b", padding: "2px 6px 6px 6px", letterSpacing: "0.5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span>Hero Layers:</span>
-                  <span style={{ fontSize: "9px", background: "#f1f5f9", color: "#475569", padding: "1px 5px", borderRadius: "3px", fontWeight: "600" }}>{contextMenu.layers.length} Layers</span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                  {contextMenu.layers.slice(0, 4).map((l, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null });
-                        if (l.type === "video") {
-                          handleOpenMediaPicker(l);
-                        } else if (l.type === "image") {
-                          handleOpenMediaPicker(l);
-                        } else if (l.type === "section") {
-                          activeTextRef.current = l.el;
-                          updateBoxRect(l.el);
-                        } else {
-                          activeTextRef.current = l.el;
-                          if (l.el.tagName === "INPUT") {
-                            l.el.focus();
-                          } else {
-                            l.el.contentEditable = "true";
-                            l.el.focus();
-                          }
-                          updateBoxRect(l.el);
-                        }
-                      }}
-                      style={{
-                        width: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "5px 8px",
-                        borderRadius: "5px",
-                        background: l.type === "video" ? "#f0fdf4" : (activeTextRef.current === l.el ? "#eff6ff" : "transparent"),
-                        color: l.type === "video" ? "#166534" : (activeTextRef.current === l.el ? "#1d4ed8" : "#334155"),
-                        fontSize: "11px",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        transition: "all 0.15s ease",
-                        border: l.type === "video" ? "1px solid #bbf7d0" : "1px solid transparent"
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = l.type === "video" ? "#dcfce7" : "#f1f5f9"; e.currentTarget.style.color = l.type === "video" ? "#166534" : "#2563eb"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = l.type === "video" ? "#f0fdf4" : (activeTextRef.current === l.el ? "#eff6ff" : "transparent"); e.currentTarget.style.color = l.type === "video" ? "#166534" : (activeTextRef.current === l.el ? "#1d4ed8" : "#334155"); }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden", minWidth: 0 }}>
-                        <span style={{ fontSize: "9.5px", fontWeight: "700", color: l.type === "video" ? "#15803d" : "#2563eb", background: l.type === "video" ? "#dcfce7" : "#eff6ff", padding: "1px 5px", borderRadius: "3px", whiteSpace: "nowrap" }}>
-                          Layer {idx + 1}
-                        </span>
-                        <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", maxWidth: "140px" }}>
-                          {l.name}
-                        </span>
-                      </div>
-                      <span style={{ fontSize: "9px", color: l.type === "video" ? "#15803d" : "#94a3b8", textTransform: "uppercase", fontWeight: "700", whiteSpace: "nowrap" }}>
-                        {l.type === "video" ? "Replace" : l.type}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {(() => {
-              const targetImg = contextMenu.imageTarget || (activeTextRef.current?.tagName === "IMG" ? activeTextRef.current : activeTextRef.current?.querySelector("img"));
-              if (targetImg) {
-                return (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null });
-                        handleOpenMediaPicker({
-                          name: targetImg.alt ? `Image (${targetImg.alt.slice(0, 20)})` : (targetImg.src?.includes("logo") ? "Brand Logo" : "Logo / Icon"),
-                          el: targetImg,
-                          type: "image"
-                        });
-                      }}
-                      style={{
-                        width: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "7px 10px",
-                        background: "#eff6ff",
-                        border: "1px solid #bfdbfe",
-                        borderRadius: "6px",
-                        color: "#1d4ed8",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        transition: "all 0.15s ease"
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "#dbeafe"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "#eff6ff"; }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                      </svg>
-                      <span>
-                        {targetImg.src?.toLowerCase().includes("logo") || targetImg.alt?.toLowerCase().includes("logo") || targetImg.closest("header, nav")
-                          ? "Edit Logo / Icon"
-                          : "Edit Image"}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null });
-                        handleOpenCrop({
-                          name: targetImg.alt ? `Image (${targetImg.alt.slice(0, 20)})` : "Image",
-                          el: targetImg,
-                          type: "image"
-                        });
-                      }}
-                      style={{
-                        width: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "7px 10px",
-                        background: "#ffffff",
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "6px",
-                        color: "#334155",
-                        fontSize: "12px",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        transition: "all 0.15s ease"
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; e.currentTarget.style.color = "#2563eb"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; e.currentTarget.style.color = "#334155"; }}
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="6" cy="6" r="3"></circle>
-                        <circle cx="6" cy="18" r="3"></circle>
-                        <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
-                        <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
-                        <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
-                      </svg>
-                      <span>Crop & Framing</span>
-                    </button>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: "2px", borderTop: "1px solid #f1f5f9", paddingTop: "5px", marginTop: "3px" }}>
-                      <div style={{ fontSize: "10px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", padding: "1px 6px" }}>Border / Style:</div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "4px", padding: "0 2px" }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            targetImg.style.border = "none";
-                            targetImg.style.boxShadow = "none";
-                            showToast("Image border removed");
-                            setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null });
-                          }}
-                          style={{ padding: "4px", fontSize: "10px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "4px", cursor: "pointer", color: "#475569" }}
-                        >
-                          Clean
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            targetImg.style.border = "2px solid #c5a880";
-                            targetImg.style.borderRadius = "8px";
-                            targetImg.style.boxShadow = "0 4px 15px rgba(197,168,128,0.2)";
-                            showToast("Luxury Gold border applied");
-                            setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null });
-                          }}
-                          style={{ padding: "4px", fontSize: "10px", background: "#faf8f5", border: "1px solid #c5a880", color: "#92400e", borderRadius: "4px", cursor: "pointer", fontWeight: "600" }}
-                        >
-                          Gold 2px
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            targetImg.style.border = "1px solid #cbd5e1";
-                            targetImg.style.borderRadius = "8px";
-                            targetImg.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
-                            showToast("Modern Card border applied");
-                            setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null });
-                          }}
-                          style={{ padding: "4px", fontSize: "10px", background: "#ffffff", border: "1px solid #cbd5e1", color: "#334155", borderRadius: "4px", cursor: "pointer" }}
-                        >
-                          Card 1px
-                        </button>
-                      </div>
-                    </div>
-
-                    {(Boolean(targetImg.style?.width) || Boolean(targetImg.style?.height) || Boolean(targetImg.style?.minHeight) || Boolean(getImgWrapper(targetImg)?.style?.width) || Boolean(getImgWrapper(targetImg)?.style?.height)) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const img = targetImg;
-                          const wrapper = getImgWrapper(img);
-                          if (wrapper) {
-                            wrapper.style.width = "";
-                            wrapper.style.maxWidth = "";
-                            wrapper.style.height = "";
-                            wrapper.style.minHeight = "";
-                            wrapper.style.aspectRatio = "";
-                            wrapper.style.left = "";
-                            wrapper.style.top = "";
-                            wrapper.style.position = "";
-                          }
-                          img.style.width = "";
-                          img.style.maxWidth = "";
-                          img.style.height = "";
-                          img.style.minHeight = "";
-                          img.style.left = "";
-                          img.style.top = "";
-                          img.style.position = "";
-                          setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null });
-                          updateBoxRect(wrapper || img);
-                          showToast("✓ Image & container reset to default");
-                        }}
+            {/* A. IMAGE CONTEXT MENU: ONLY when right-clicking on an image */}
+            {contextMenu.menuMode === "image" && (() => {
+              const targetImg = contextMenu.imageTarget || (activeTextRef.current?.tagName === "IMG" ? activeTextRef.current : activeTextRef.current?.querySelector("img")) || activeTextRef.current;
+              if (!targetImg) return null;
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
+                      handleOpenCrop({
+                        name: targetImg.alt ? `Image (${targetImg.alt.slice(0, 20)})` : (targetImg.src?.includes("logo") ? "Brand Logo" : "Photo"),
+                        el: targetImg,
+                        type: "image"
+                      }, "main");
+                    }}
                     style={{
                       width: "100%",
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
-                      padding: "6px 10px",
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
+                      padding: "7px 10px",
+                      background: "#0f172a",
+                      border: "1px solid #0f172a",
                       borderRadius: "6px",
-                      color: "#475569",
+                      color: "#ffffff",
                       fontSize: "11.5px",
-                      fontWeight: "500",
+                      fontWeight: "600",
                       cursor: "pointer",
                       textAlign: "left",
+                      boxShadow: "0 2px 6px rgba(15,23,42,0.18)",
                       transition: "all 0.15s ease"
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#1e293b"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#0f172a"; }}
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="1 4 1 10 7 10"></polyline>
-                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2v14a2 2 0 0 0 2 2h14"></path>
+                      <path d="M18 22V8a2 2 0 0 0-2-2H2"></path>
                     </svg>
-                    <span>Reset to Original Size</span>
+                    <span>
+                      {targetImg.src?.toLowerCase().includes("logo") || targetImg.alt?.toLowerCase().includes("logo") || targetImg.closest("header, nav")
+                        ? "Logo Framing & Replace"
+                        : "Photo Framing & Replace"}
+                    </span>
+                  </button>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", borderTop: "1px solid #f1f5f9", paddingTop: "4px", marginTop: "2px" }}>
+                    <div style={{ fontSize: "9.5px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", padding: "1px 4px" }}>Border / Style:</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "4px" }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          targetImg.style.border = "none";
+                          targetImg.style.boxShadow = "none";
+                          showToast("Image border removed");
+                          setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
+                        }}
+                        style={{ padding: "3px", fontSize: "9.5px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "4px", cursor: "pointer", color: "#475569" }}
+                      >
+                        Clean
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          targetImg.style.border = "2px solid #c5a880";
+                          targetImg.style.borderRadius = "8px";
+                          targetImg.style.boxShadow = "0 4px 15px rgba(197,168,128,0.2)";
+                          showToast("Luxury Gold border applied");
+                          setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
+                        }}
+                        style={{ padding: "3px", fontSize: "9.5px", background: "#faf8f5", border: "1px solid #c5a880", color: "#92400e", borderRadius: "4px", cursor: "pointer", fontWeight: "600" }}
+                      >
+                        Gold 2px
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          targetImg.style.border = "1px solid #cbd5e1";
+                          targetImg.style.borderRadius = "8px";
+                          targetImg.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+                          showToast("Modern Card border applied");
+                          setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
+                        }}
+                        style={{ padding: "3px", fontSize: "9.5px", background: "#ffffff", border: "1px solid #cbd5e1", color: "#334155", borderRadius: "4px", cursor: "pointer" }}
+                      >
+                        Card 1px
+                      </button>
+                    </div>
+                  </div>
+
+                  {(Boolean(targetImg.style?.width) || Boolean(targetImg.style?.height) || Boolean(targetImg.style?.minHeight) || Boolean(getImgWrapper(targetImg)?.style?.width) || Boolean(getImgWrapper(targetImg)?.style?.height)) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const img = targetImg;
+                        const wrapper = getImgWrapper(img);
+                        if (wrapper) {
+                          wrapper.style.width = "";
+                          wrapper.style.maxWidth = "";
+                          wrapper.style.height = "";
+                          wrapper.style.minHeight = "";
+                          wrapper.style.aspectRatio = "";
+                          wrapper.style.left = "";
+                          wrapper.style.top = "";
+                          wrapper.style.position = "";
+                        }
+                        img.style.width = "";
+                        img.style.maxWidth = "";
+                        img.style.height = "";
+                        img.style.minHeight = "";
+                        img.style.left = "";
+                        img.style.top = "";
+                        img.style.position = "";
+                        setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
+                        updateBoxRect(wrapper || img);
+                        showToast("✓ Image & container reset to default");
+                      }}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        padding: "5px 9px",
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "6px",
+                        color: "#475569",
+                        fontSize: "11px",
+                        fontWeight: "500",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "all 0.15s ease",
+                        marginTop: "2px"
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                      </svg>
+                      <span>Reset to Original Size</span>
                     </button>
                   )}
                 </>
               );
-            }
-            return (
-              <button
-                type="button"
-                onClick={() => {
-                  if (activeTextRef.current) {
-                    activeTextRef.current.contentEditable = "true";
-                    activeTextRef.current.focus();
-                  }
-                  setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null });
-                }}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "7px 10px",
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  borderRadius: "6px",
-                  color: "#1d4ed8",
-                  fontSize: "12px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  textAlign: "left"
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-                <span>Edit Content</span>
-              </button>
-            );
-          })()}
+            })()}
 
-            {contextMenu.layers?.some((l) => l.type === "video") && (
-              <button
-                type="button"
-                onClick={() => {
-                  const vidLayer = contextMenu.layers.find((l) => l.type === "video");
-                  setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null });
-                  if (vidLayer) handleOpenMediaPicker(vidLayer);
-                }}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "7px 10px",
-                  background: "#f0fdf4",
-                  border: "1px solid #bbf7d0",
-                  borderRadius: "6px",
-                  color: "#166534",
-                  fontSize: "12px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "all 0.15s ease",
-                  marginTop: "2px"
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#dcfce7"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#f0fdf4"; }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="23 7 16 12 23 17 23 7"></polygon>
-                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-                </svg>
-                <span>Change Hero Video</span>
-              </button>
+            {/* B. VIDEO CONTEXT MENU: ONLY when right-clicking on a video */}
+            {contextMenu.menuMode === "video" && (
+              <>
+                {contextMenu.isHero && contextMenu.layers && contextMenu.layers.length > 0 && (
+                  <div style={{ borderBottom: "1px solid #f1f5f9", paddingBottom: "5px", marginBottom: "4px" }}>
+                    <div style={{ fontSize: "9.5px", fontWeight: "700", textTransform: "uppercase", color: "#64748b", padding: "1px 4px 4px 4px", letterSpacing: "0.5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span>Hero Layers:</span>
+                      <span style={{ fontSize: "8.5px", background: "#f1f5f9", color: "#475569", padding: "1px 4px", borderRadius: "3px", fontWeight: "600" }}>{contextMenu.layers.length} Layers</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                      {contextMenu.layers.slice(0, 4).map((l, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
+                            if (l.type === "video") {
+                              handleOpenVideoModal(l.el, "framing");
+                            } else if (l.type === "image") {
+                              handleOpenMediaPicker(l);
+                            } else if (l.type === "section") {
+                              activeTextRef.current = l.el;
+                              updateBoxRect(l.el);
+                            } else {
+                              activeTextRef.current = l.el;
+                              if (l.el.tagName === "INPUT") {
+                                l.el.focus();
+                              } else {
+                                l.el.contentEditable = "true";
+                                l.el.focus();
+                              }
+                              updateBoxRect(l.el);
+                            }
+                          }}
+                          style={{
+                            width: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "4px 6px",
+                            borderRadius: "5px",
+                            background: l.type === "video" ? "#f0fdf4" : (activeTextRef.current === l.el ? "#eff6ff" : "transparent"),
+                            color: l.type === "video" ? "#166534" : (activeTextRef.current === l.el ? "#1d4ed8" : "#334155"),
+                            fontSize: "10.5px",
+                            fontWeight: "500",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            transition: "all 0.15s ease",
+                            border: l.type === "video" ? "1px solid #bbf7d0" : "1px solid transparent"
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = l.type === "video" ? "#dcfce7" : "#f1f5f9"; e.currentTarget.style.color = l.type === "video" ? "#166534" : "#2563eb"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = l.type === "video" ? "#f0fdf4" : (activeTextRef.current === l.el ? "#eff6ff" : "transparent"); e.currentTarget.style.color = l.type === "video" ? "#166534" : (activeTextRef.current === l.el ? "#1d4ed8" : "#334155"); }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "5px", overflow: "hidden", minWidth: 0 }}>
+                            <span style={{ fontSize: "9px", fontWeight: "700", color: l.type === "video" ? "#15803d" : "#2563eb", background: l.type === "video" ? "#dcfce7" : "#eff6ff", padding: "1px 4px", borderRadius: "3px", whiteSpace: "nowrap" }}>
+                              Layer {idx + 1}
+                            </span>
+                            <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", maxWidth: "120px" }}>
+                              {l.name}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: "8.5px", color: l.type === "video" ? "#15803d" : "#94a3b8", textTransform: "uppercase", fontWeight: "700", whiteSpace: "nowrap" }}>
+                            {l.type === "video" ? "Edit Video" : l.type}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 1. Edit Video Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetVid = contextMenu.videoTarget || document.querySelector("video");
+                    setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
+                    handleOpenVideoModal(targetVid, "framing");
+                  }}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "6px 9px",
+                    background: "#0f172a",
+                    border: "1px solid #0f172a",
+                    borderRadius: "6px",
+                    color: "#ffffff",
+                    fontSize: "11.5px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "all 0.15s ease"
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#1e293b"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "#0f172a"; }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                  </svg>
+                  <span>Edit Video</span>
+                </button>
+              </>
+            )}
+
+            {/* C. LAYERS CONTEXT MENU: ONLY when NO image and NO video */}
+            {contextMenu.menuMode === "layers" && (
+              <>
+                {contextMenu.isHero && contextMenu.layers && contextMenu.layers.length > 0 && (
+                  <div style={{ borderBottom: "1px solid #f1f5f9", paddingBottom: "5px", marginBottom: "4px" }}>
+                    <div style={{ fontSize: "9.5px", fontWeight: "700", textTransform: "uppercase", color: "#64748b", padding: "1px 4px 4px 4px", letterSpacing: "0.5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span>Hero Layers:</span>
+                      <span style={{ fontSize: "8.5px", background: "#f1f5f9", color: "#475569", padding: "1px 4px", borderRadius: "3px", fontWeight: "600" }}>{contextMenu.layers.length} Layers</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                      {contextMenu.layers.slice(0, 4).map((l, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
+                            if (l.type === "video") {
+                              handleOpenMediaPicker(l);
+                            } else if (l.type === "image") {
+                              handleOpenMediaPicker(l);
+                            } else if (l.type === "section") {
+                              activeTextRef.current = l.el;
+                              updateBoxRect(l.el);
+                            } else {
+                              activeTextRef.current = l.el;
+                              if (l.el.tagName === "INPUT") {
+                                l.el.focus();
+                              } else {
+                                l.el.contentEditable = "true";
+                                l.el.focus();
+                              }
+                              updateBoxRect(l.el);
+                            }
+                          }}
+                          style={{
+                            width: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "4px 6px",
+                            borderRadius: "5px",
+                            background: l.type === "video" ? "#f0fdf4" : (activeTextRef.current === l.el ? "#eff6ff" : "transparent"),
+                            color: l.type === "video" ? "#166534" : (activeTextRef.current === l.el ? "#1d4ed8" : "#334155"),
+                            fontSize: "10.5px",
+                            fontWeight: "500",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            transition: "all 0.15s ease",
+                            border: l.type === "video" ? "1px solid #bbf7d0" : "1px solid transparent"
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = l.type === "video" ? "#dcfce7" : "#f1f5f9"; e.currentTarget.style.color = l.type === "video" ? "#166534" : "#2563eb"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = l.type === "video" ? "#f0fdf4" : (activeTextRef.current === l.el ? "#eff6ff" : "transparent"); e.currentTarget.style.color = l.type === "video" ? "#166534" : (activeTextRef.current === l.el ? "#1d4ed8" : "#334155"); }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "5px", overflow: "hidden", minWidth: 0 }}>
+                            <span style={{ fontSize: "9px", fontWeight: "700", color: l.type === "video" ? "#15803d" : "#2563eb", background: l.type === "video" ? "#dcfce7" : "#eff6ff", padding: "1px 4px", borderRadius: "3px", whiteSpace: "nowrap" }}>
+                              Layer {idx + 1}
+                            </span>
+                            <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", maxWidth: "120px" }}>
+                              {l.name}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: "8.5px", color: l.type === "video" ? "#15803d" : "#94a3b8", textTransform: "uppercase", fontWeight: "700", whiteSpace: "nowrap" }}>
+                            {l.type === "video" ? "Replace" : l.type}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeTextRef.current) {
+                      activeTextRef.current.contentEditable = "true";
+                      activeTextRef.current.focus();
+                    }
+                    setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
+                  }}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "6px 9px",
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    borderRadius: "6px",
+                    color: "#1d4ed8",
+                    fontSize: "11.5px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    textAlign: "left"
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  <span>Edit Content</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
+                    handleOpenSectionModal();
+                  }}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "6px 9px",
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: "6px",
+                    color: "#166534",
+                    fontSize: "11.5px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    marginTop: "2px",
+                    transition: "all 0.15s ease"
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#dcfce7"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "#f0fdf4"; }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  <span>Add Section & Grid</span>
+                </button>
+              </>
             )}
 
             <button
               type="button"
               onClick={() => {
-                handleOpenSectionModal();
-              }}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "6px 10px",
-                background: "#f0fdf4",
-                border: "1px solid #bbf7d0",
-                borderRadius: "6px",
-                color: "#166534",
-                fontSize: "11.5px",
-                fontWeight: "600",
-                cursor: "pointer",
-                textAlign: "left",
-                marginTop: "2px",
-                transition: "all 0.15s ease"
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "#dcfce7"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "#f0fdf4"; }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span>Add Section & Grid</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null });
+                setContextMenu({ visible: false, x: 0, y: 0, layers: [], imageTarget: null, videoTarget: null, menuMode: "layers", opensLeft: false });
                 handleDeleteActiveElement();
               }}
               style={{
@@ -4188,12 +5500,12 @@ export default function VisualEditor() {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                padding: "6px 10px",
+                padding: "6px 9px",
                 background: "#ffffff",
                 border: "1px solid #fecaca",
                 borderRadius: "6px",
                 color: "#dc2626",
-                fontSize: "11.5px",
+                fontSize: "11px",
                 fontWeight: "500",
                 cursor: "pointer",
                 textAlign: "left",
@@ -4203,7 +5515,7 @@ export default function VisualEditor() {
               onMouseEnter={(e) => { e.currentTarget.style.background = "#fef2f2"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; }}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
               </svg>
@@ -4213,50 +5525,65 @@ export default function VisualEditor() {
         </div>
       )}
 
-      {/* DYNAMIC FLOATING TEXT PILL BAR (RICH ICONS, COLOR PICKER & DEPTH SHADOW) */}
-      {textPillBar.visible && (
+      {/* DYNAMIC FLOATING TEXT RIBBON TOOLBAR (EXACT MATCH WITH CMS EDITOR TOOLBAR) */}
+      {textPillBar.visible && activeTextRef.current && document.body.contains(activeTextRef.current) && !isWebsiteModalOpen() && (
         <div
           id="dynamicTextPillBar"
+          className="word-ribbon-toolbar"
           style={{
             position: "fixed",
-            left: `${textPillBar.x}px`,
+            left: `${textPillBar.left ?? textPillBar.x}px`,
             top: `${textPillBar.y}px`,
-            transform: textPillBar.placement === "bottom" ? "translate(-50%, 0)" : "translate(-50%, -100%)",
-            background: "#ffffff",
+            transform: "none",
+            background: "#f8fafc",
             border: "1px solid #cbd5e1",
-            borderRadius: "14px",
-            boxShadow: "0 22px 50px -10px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0, 0, 0, 0.06), 0 8px 18px -4px rgba(0, 0, 0, 0.12)",
+            borderRadius: "8px",
+            boxShadow: "0 14px 35px -6px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.06)",
             display: "flex",
             alignItems: "center",
-            gap: "3px",
-            padding: "5px 10px",
+            gap: "4px",
+            padding: "5px 8px",
             zIndex: 1000002,
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            fontSize: "12px",
-            color: "#0f172a",
-            animation: "pillPop 0.15s cubic-bezier(0, 0, 0.2, 1)",
-            maxWidth: "calc(100vw - 24px)",
+            userSelect: "none",
+            animation: "editorToolbarFadeIn 0.1s ease-out",
+            maxWidth: "calc(100vw - 48px)",
             boxSizing: "border-box"
           }}
-          onMouseDown={(e) => e.preventDefault()}
+          onMouseEnter={() => {
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("cms-keep-mega-open"));
+            }
+          }}
+          onMouseLeave={() => {
+            hideEditorTooltip();
+          }}
+          onMouseDown={(e) => {
+            if (e.target.closest("select, input, option, label, textarea, #linkPopoverWrapper")) {
+              return;
+            }
+            e.preventDefault();
+          }}
         >
-          {/* DRAG HANDLE TO REPOSITION TOOLBAR FREELY ANYWHERE */}
+          {/* DRAG HANDLE */}
           <div
-            title="Drag toolbar to reposition anywhere on screen"
+            title="Drag toolbar to reposition anywhere"
             onMouseDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
               const startX = e.clientX;
               const startY = e.clientY;
-              const initX = textPillBar.x;
+              const initLeft = textPillBar.left ?? textPillBar.x;
               const initY = textPillBar.y;
               const onMove = (me) => {
                 const dx = me.clientX - startX;
                 const dy = me.clientY - startY;
+                const newLeft = Math.max(16, Math.min(window.innerWidth - 660 - 32, initLeft + dx));
+                const newY = Math.max(60, Math.min(window.innerHeight - 30, initY + dy));
                 setTextPillBar((prev) => ({
                   ...prev,
-                  x: Math.max(100, Math.min(window.innerWidth - 100, initX + dx)),
-                  y: Math.max(102, Math.min(window.innerHeight - 30, initY + dy))
+                  left: newLeft,
+                  x: newLeft,
+                  y: newY
                 }));
               };
               const onUp = () => {
@@ -4270,49 +5597,35 @@ export default function VisualEditor() {
               cursor: "grab",
               display: "flex",
               alignItems: "center",
-              padding: "4px 6px 4px 2px",
+              padding: "4px 4px 4px 0",
               color: "#94a3b8",
-              fontSize: "13px",
-              borderRight: "1px solid #e2e8f0",
-              marginRight: "2px",
+              fontSize: "12px",
               userSelect: "none"
             }}
           >
             ⋮⋮
           </div>
 
-          {/* DUPLICATE BLOCK BUTTON (CLIPBOARD WITH + SIGN) */}
+          {/* DUPLICATE BUTTON (CLIPBOARD WITH +) */}
           <button
             type="button"
+            className="word-tool-btn"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
-              setBlockDropdownOpen(false);
-              handleDuplicateActiveElement();
+              if (activeTextRef.current) {
+                handleDuplicateActiveElement();
+              }
             }}
-            title="Duplicate block (creates a copy in the section/grid)"
-            style={{
-              padding: "5px 9px",
-              background: "#f8fafc",
-              border: "1px solid #cbd5e1",
-              cursor: "pointer",
-              borderRadius: "6px",
-              color: "#0f172a",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              fontSize: "11px",
-              fontWeight: "600",
-              transition: "all 0.15s ease",
-              marginRight: "3px"
-            }}
+            onMouseEnter={(e) => showEditorTooltip(e, "Duplicate Block")}
+            onMouseLeave={hideEditorTooltip}
+            style={{ marginRight: "3px" }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-              <line x1="12" y1="11" x2="12" y2="17"></line>
-              <line x1="9" y1="14" x2="15" y2="14"></line>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+              <line x1="12" y1="11" x2="12" y2="17" />
+              <line x1="9" y1="14" x2="15" y2="14" />
             </svg>
-            <span>Duplicate</span>
           </button>
 
           {/* Caret arrow pointing to active text */}
@@ -4332,435 +5645,630 @@ export default function VisualEditor() {
                   }),
               left: `${textPillBar.arrowOffset ?? 250}px`,
               transform: "translateX(-50%) rotate(45deg)",
-              width: "12px",
-              height: "12px",
-              background: "#ffffff",
+              width: "10px",
+              height: "10px",
+              background: "#f8fafc",
               pointerEvents: "none"
             }}
           />
 
-          {/* Typography Formatting */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => applyFormat("bold")}
-            title="Bold"
-            style={{
-              fontWeight: "800",
-              padding: "5px 8px",
-              background: activeFormats.bold ? "#eff6ff" : "none",
-              border: activeFormats.bold ? "1px solid #93c5fd" : "1px solid transparent",
-              cursor: "pointer",
-              borderRadius: "6px",
-              color: activeFormats.bold ? "#2563eb" : "#0f172a",
-              fontSize: "13px",
-              transition: "all 0.15s ease"
-            }}
-          >
-            B
-          </button>
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => applyFormat("italic")}
-            title="Italic"
-            style={{
-              fontStyle: "italic",
-              padding: "5px 8px",
-              background: activeFormats.italic ? "#eff6ff" : "none",
-              border: activeFormats.italic ? "1px solid #93c5fd" : "1px solid transparent",
-              cursor: "pointer",
-              borderRadius: "6px",
-              color: activeFormats.italic ? "#2563eb" : "#0f172a",
-              fontSize: "13px",
-              fontFamily: "serif",
-              transition: "all 0.15s ease"
-            }}
-          >
-            I
-          </button>
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => applyFormat("underline")}
-            title="Underline"
-            style={{
-              textDecoration: "underline",
-              padding: "5px 8px",
-              background: activeFormats.underline ? "#eff6ff" : "none",
-              border: activeFormats.underline ? "1px solid #93c5fd" : "1px solid transparent",
-              cursor: "pointer",
-              borderRadius: "6px",
-              color: activeFormats.underline ? "#2563eb" : "#0f172a",
-              fontSize: "13px",
-              transition: "all 0.15s ease"
-            }}
-          >
-            U
-          </button>
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => applyFormat("strikeThrough")}
-            title="Strikethrough"
-            style={{
-              textDecoration: "line-through",
-              padding: "5px 8px",
-              background: activeFormats.strikeThrough ? "#eff6ff" : "none",
-              border: activeFormats.strikeThrough ? "1px solid #93c5fd" : "1px solid transparent",
-              cursor: "pointer",
-              borderRadius: "6px",
-              color: activeFormats.strikeThrough ? "#2563eb" : "#64748b",
-              fontSize: "13px",
-              transition: "all 0.15s ease"
-            }}
-          >
-            S
-          </button>
-
-          <span style={{ width: "1px", height: "18px", background: "#e2e8f0", margin: "0 3px" }} />
-
-          {/* Typography Hierarchy Dropdown (H1, H2, H3, Paragraph) */}
-          <div id="blockFormatDropdownWrapper" style={{ position: "relative" }}>
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => {
-                e.stopPropagation();
-                setBlockDropdownOpen(!blockDropdownOpen);
-              }}
-              title="Heading & Paragraph Styles"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "4px 8px",
-                background: blockDropdownOpen ? "#eff6ff" : (["h1", "h2", "h3"].includes(activeFormats.block) ? "#eff6ff" : "none"),
-                border: blockDropdownOpen || ["h1", "h2", "h3"].includes(activeFormats.block) ? "1px solid #93c5fa" : "1px solid #cbd5e1",
-                borderRadius: "6px",
-                cursor: "pointer",
-                color: ["h1", "h2", "h3"].includes(activeFormats.block) ? "#2563eb" : "#334155",
-                fontSize: "11.5px",
-                fontWeight: "700",
-                minWidth: "64px",
-                justifyContent: "space-between",
-                transition: "all 0.15s ease"
-              }}
-            >
-              <span>
-                {activeFormats.block === "h1"
-                  ? "H1"
-                  : activeFormats.block === "h2"
-                  ? "H2"
-                  : activeFormats.block === "h3"
-                  ? "H3"
-                  : "Para"}
-              </span>
-              <svg
-                width="9"
-                height="9"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
+          {/* GROUP 1: CUSTOM LUXURY FONT FAMILY & FONT SIZE DROPDOWNS */}
+          <div className="word-toolbar-group" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {/* Custom Font Family Dropdown */}
+            <div id="customFontFamilyWrapper" style={{ position: "relative" }}>
+              <button
+                type="button"
+                className="word-tool-select"
+                onClick={() => {
+                  setFontSizeOpen(false);
+                  setFontFamilyOpen((prev) => !prev);
+                }}
+                onMouseEnter={(e) => showEditorTooltip(e, "Font Family")}
+                onMouseLeave={hideEditorTooltip}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const sel = window.getSelection();
+                  if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                    savedSelectionRangeRef.current = sel.getRangeAt(0).cloneRange();
+                  }
+                }}
                 style={{
-                  transform: blockDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
-                  transition: "transform 0.15s ease"
+                  height: "28px",
+                  minWidth: "148px",
+                  padding: "0 10px 0 9px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "6px",
+                  background: fontFamilyOpen ? "#0f172a" : "#ffffff",
+                  color: fontFamilyOpen ? "#ffffff" : "#0f172a",
+                  border: fontFamilyOpen ? "1px solid #0f172a" : "1px solid #cbd5e1",
+                  borderRadius: "6px",
+                  fontSize: "11.5px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                  transition: "all 0.15s ease"
                 }}
               >
-                <polyline points="6 9 12 15 18 9"></polyline>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "120px" }}>
+                  {(FONT_OPTIONS.find((f) => f.value === activeFormats.fontFamily) ||
+                    FONT_OPTIONS.find((f) => activeFormats.fontFamily && f.value.toLowerCase().includes(activeFormats.fontFamily.toLowerCase().replace(/['"]/g, "").split(",")[0].trim())) ||
+                    FONT_OPTIONS[0]).label}
+                </span>
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    transform: fontFamilyOpen ? "rotate(180deg)" : "none",
+                    transition: "transform 0.15s ease",
+                    flexShrink: 0
+                  }}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {fontFamilyOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: textPillBar.placement === "bottom" ? "auto" : "calc(100% + 6px)",
+                    bottom: textPillBar.placement === "bottom" ? "calc(100% + 6px)" : "auto",
+                    left: 0,
+                    minWidth: "195px",
+                    background: "#0f172a",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    borderRadius: "6px",
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+                    padding: "5px",
+                    zIndex: 100010,
+                    backdropFilter: "blur(12px)"
+                  }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                >
+                  {/* Matching tooltip-style pointer arrow */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      ...(textPillBar.placement === "bottom"
+                        ? {
+                            bottom: "-4px",
+                            borderRight: "1px solid rgba(255, 255, 255, 0.15)",
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.15)"
+                          }
+                        : {
+                            top: "-4px",
+                            borderLeft: "1px solid rgba(255, 255, 255, 0.15)",
+                            borderTop: "1px solid rgba(255, 255, 255, 0.15)"
+                          }),
+                      left: "30px",
+                      transform: "rotate(45deg)",
+                      width: "7px",
+                      height: "7px",
+                      background: "#0f172a"
+                    }}
+                  />
+                  {FONT_OPTIONS.map((f) => {
+                    const activeFont = activeFormats.fontFamily || "Optima, Cinzel, serif";
+                    const isSelected = activeFont === f.value || activeFont.toLowerCase().includes(f.value.toLowerCase().replace(/['"]/g, "").split(",")[0].trim());
+                    return (
+                      <div
+                        key={f.value}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          if (activeTextRef.current) {
+                            const target = activeTextRef.current;
+                            const handled = applyInlineFormatting(target, "fontFamily", f.value);
+                            if (!handled) {
+                              target.style.setProperty("font-family", f.value, "important");
+                            }
+                            setActiveFormats((prev) => ({ ...prev, fontFamily: f.value }));
+                            updateActiveFormats(target);
+                            syncTextToCMS(target);
+                          }
+                          setFontFamilyOpen(false);
+                        }}
+                        style={{
+                          padding: "7px 10px",
+                          borderRadius: "5px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          fontSize: "12px",
+                          fontFamily: f.value,
+                          color: isSelected ? "#38bdf8" : "#e2e8f0",
+                          background: isSelected ? "rgba(56, 189, 248, 0.15)" : "transparent",
+                          transition: "background 0.12s ease"
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = "transparent";
+                        }}
+                      >
+                        <span>{f.label}</span>
+                        {isSelected && (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Custom Font Size Dropdown */}
+            <div id="customFontSizeWrapper" style={{ position: "relative" }}>
+              <button
+                type="button"
+                className="word-tool-select"
+                onClick={() => {
+                  setFontFamilyOpen(false);
+                  setFontSizeOpen((prev) => !prev);
+                }}
+                onMouseEnter={(e) => showEditorTooltip(e, "Font Size")}
+                onMouseLeave={hideEditorTooltip}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const sel = window.getSelection();
+                  if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                    savedSelectionRangeRef.current = sel.getRangeAt(0).cloneRange();
+                  }
+                }}
+                style={{
+                  height: "28px",
+                  minWidth: "66px",
+                  padding: "0 8px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "4px",
+                  background: fontSizeOpen ? "#0f172a" : "#ffffff",
+                  color: fontSizeOpen ? "#ffffff" : "#0f172a",
+                  border: fontSizeOpen ? "1px solid #0f172a" : "1px solid #cbd5e1",
+                  borderRadius: "6px",
+                  fontSize: "11.5px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                <span>{activeFormats.fontSize ? `${activeFormats.fontSize}px` : ""}</span>
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    transform: fontSizeOpen ? "rotate(180deg)" : "none",
+                    transition: "transform 0.15s ease",
+                    flexShrink: 0
+                  }}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {fontSizeOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: textPillBar.placement === "bottom" ? "auto" : "calc(100% + 6px)",
+                    bottom: textPillBar.placement === "bottom" ? "calc(100% + 6px)" : "auto",
+                    left: 0,
+                    width: "82px",
+                    maxHeight: "185px",
+                    overflowY: "auto",
+                    background: "#0f172a",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    borderRadius: "6px",
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+                    padding: "4px",
+                    zIndex: 100010,
+                    backdropFilter: "blur(12px)",
+                    scrollbarWidth: "thin",
+                    scrollbarColor: "#334155 transparent"
+                  }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                >
+                  {/* Matching tooltip-style pointer arrow */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      ...(textPillBar.placement === "bottom"
+                        ? {
+                            bottom: "-4px",
+                            borderRight: "1px solid rgba(255, 255, 255, 0.15)",
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.15)"
+                          }
+                        : {
+                            top: "-4px",
+                            borderLeft: "1px solid rgba(255, 255, 255, 0.15)",
+                            borderTop: "1px solid rgba(255, 255, 255, 0.15)"
+                          }),
+                      left: "22px",
+                      transform: "rotate(45deg)",
+                      width: "7px",
+                      height: "7px",
+                      background: "#0f172a"
+                    }}
+                  />
+                  {FONT_SIZES.map((sz) => {
+                    const isSelected = Boolean(activeFormats.fontSize) && activeFormats.fontSize === sz;
+                    return (
+                      <div
+                        key={sz}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          handleApplyExactFontSize(sz);
+                          setActiveFormats((prev) => ({ ...prev, fontSize: sz }));
+                          setFontSizeOpen(false);
+                        }}
+                        style={{
+                          padding: "5px 6px",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "11px",
+                          fontWeight: isSelected ? "700" : "500",
+                          textAlign: "center",
+                          color: isSelected ? "#38bdf8" : "#f1f5f9",
+                          background: isSelected ? "rgba(56, 189, 248, 0.18)" : "transparent",
+                          transition: "all 0.12s ease"
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = "transparent";
+                        }}
+                      >
+                        {sz}px
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* GROUP 2: FORMAT BUTTONS (BOLD, ITALIC, UNDERLINE, STRIKE, LINK) */}
+          <div className="word-toolbar-group" style={{ position: "relative" }}>
+            <button
+              type="button"
+              className={`word-tool-btn ${activeFormats.bold ? "active" : ""}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => applyFormat("bold")}
+              onMouseEnter={(e) => showEditorTooltip(e, "Bold")}
+              onMouseLeave={hideEditorTooltip}
+            >
+              <b>B</b>
+            </button>
+            <button
+              type="button"
+              className={`word-tool-btn ${activeFormats.italic ? "active" : ""}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => applyFormat("italic")}
+              onMouseEnter={(e) => showEditorTooltip(e, "Italic")}
+              onMouseLeave={hideEditorTooltip}
+            >
+              <i>I</i>
+            </button>
+            <button
+              type="button"
+              className={`word-tool-btn ${activeFormats.underline ? "active" : ""}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => applyFormat("underline")}
+              onMouseEnter={(e) => showEditorTooltip(e, "Underline")}
+              onMouseLeave={hideEditorTooltip}
+            >
+              <u>U</u>
+            </button>
+            <button
+              type="button"
+              className={`word-tool-btn ${activeFormats.strikeThrough ? "active" : ""}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => applyFormat("strikeThrough")}
+              onMouseEnter={(e) => showEditorTooltip(e, "Strikethrough")}
+              onMouseLeave={hideEditorTooltip}
+            >
+              <s>S</s>
+            </button>
+            <button
+              id="btnToggleLinkPopover"
+              type="button"
+              className={`word-tool-btn ${activeFormats.hasLink || linkPopoverOpen ? "active" : ""}`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0) {
+                  savedSelectionRangeRef.current = sel.getRangeAt(0).cloneRange();
+                }
+              }}
+              onClick={() => {
+                const target = activeTextRef.current;
+                const existingHref = target?.tagName === "A" ? (target.getAttribute("href") || target.dataset?.cmsOrigHref) : (target?.querySelector("a")?.getAttribute("href") || "");
+                setLinkUrl(existingHref || "");
+                setLinkPopoverOpen((prev) => !prev);
+              }}
+              onMouseEnter={(e) => showEditorTooltip(e, "Add Hyperlink")}
+              onMouseLeave={hideEditorTooltip}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
               </svg>
             </button>
 
-            {/* Dropdown Menu */}
-            {blockDropdownOpen && (
+            {/* HYPERLINK INPUT POPOVER */}
+            {linkPopoverOpen && (
               <div
+                id="linkPopoverWrapper"
                 style={{
                   position: "absolute",
-                  top: "calc(100% + 6px)",
-                  left: "0",
-                  width: "155px",
+                  top: textPillBar.placement === "bottom" ? "-48px" : "calc(100% + 8px)",
+                  left: "50%",
+                  transform: "translateX(-50%)",
                   background: "#ffffff",
                   border: "1px solid #cbd5e1",
                   borderRadius: "8px",
-                  boxShadow: "0 10px 25px -5px rgba(0,0,0,0.18), 0 4px 6px -2px rgba(0,0,0,0.05)",
-                  padding: "4px",
-                  zIndex: 1000005,
+                  boxShadow: "0 10px 25px -5px rgba(0,0,0,0.2), 0 8px 10px -6px rgba(0,0,0,0.1)",
+                  padding: "6px 8px",
                   display: "flex",
-                  flexDirection: "column",
-                  gap: "2px"
+                  alignItems: "center",
+                  gap: "6px",
+                  zIndex: 100010,
+                  whiteSpace: "nowrap"
                 }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
               >
-                {[
-                  { tag: "h1", label: "Heading 1", short: "H1", style: { fontSize: "14px", fontWeight: "800" } },
-                  { tag: "h2", label: "Heading 2", short: "H2", style: { fontSize: "13px", fontWeight: "700" } },
-                  { tag: "h3", label: "Heading 3", short: "H3", style: { fontSize: "12px", fontWeight: "600" } },
-                  { tag: "p", label: "Paragraph", short: "Para", style: { fontSize: "11.5px", fontWeight: "400" } }
-                ].map((item) => {
-                  const isSelected = activeFormats.block === item.tag;
-                  return (
-                    <button
-                      key={item.tag}
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        applyFormat("formatBlock", item.tag);
-                        setBlockDropdownOpen(false);
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "6px 8px",
-                        borderRadius: "5px",
-                        border: "none",
-                        background: isSelected ? "#eff6ff" : "transparent",
-                        color: isSelected ? "#2563eb" : "#1e293b",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        width: "100%",
-                        transition: "background 0.12s ease"
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isSelected) e.currentTarget.style.background = "#f8fafc";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isSelected) e.currentTarget.style.background = "transparent";
-                      }}
-                    >
-                      <span style={item.style}>{item.label}</span>
-                      <span style={{ fontSize: "10px", color: isSelected ? "#2563eb" : "#94a3b8", fontWeight: "600" }}>
-                        {item.short}
-                      </span>
-                    </button>
-                  );
-                })}
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Paste or type URL (https://... or /path)"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleApplyHyperlink(linkUrl);
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      setLinkPopoverOpen(false);
+                    }
+                  }}
+                  autoFocus
+                  style={{
+                    padding: "4px 8px",
+                    fontSize: "12px",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "4px",
+                    outline: "none",
+                    width: "210px",
+                    color: "#0f172a"
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleApplyHyperlink(linkUrl)}
+                  style={{
+                    background: "#09090b",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "4px",
+                    padding: "4px 10px",
+                    fontSize: "11.5px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >
+                  Apply
+                </button>
+                {linkUrl && (
+                  <button
+                    type="button"
+                    onClick={() => handleApplyHyperlink("")}
+                    onMouseEnter={(e) => showEditorTooltip(e, "Remove Link", "bottom")}
+                    onMouseLeave={hideEditorTooltip}
+                    style={{
+                      background: "#fee2e2",
+                      color: "#dc2626",
+                      border: "none",
+                      borderRadius: "4px",
+                      padding: "4px 7px",
+                      fontSize: "11px",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Unlink
+                  </button>
+                )}
               </div>
             )}
           </div>
 
-          <span style={{ width: "1px", height: "18px", background: "#e2e8f0", margin: "0 3px" }} />
-
-          {/* Font Size Stepper (- 12 +) */}
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              background: "#f8fafc",
-              border: "1px solid #cbd5e1",
-              borderRadius: "6px",
-              padding: "1px 2px",
-              gap: "2px"
-            }}
-          >
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => handleChangeFontSize(-1)}
-              title="Decrease Font Size"
-              style={{
-                width: "20px",
-                height: "20px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "transparent",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                color: "#0f172a",
-                fontSize: "13px",
-                fontWeight: "700",
-                lineHeight: "1"
-              }}
+          {/* GROUP 3: TEXT COLOR WITH INDICATOR BAR */}
+          <div className="word-toolbar-group">
+            <label
+              className="word-color-btn"
+              onMouseEnter={(e) => showEditorTooltip(e, "Text Color")}
+              onMouseLeave={hideEditorTooltip}
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              -
-            </button>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={fontSizeInput}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                const sel = window.getSelection();
-                if (sel && sel.rangeCount > 0 && !sel.isCollapsed && activeTextRef.current?.contains(sel.anchorNode)) {
-                  savedSelectionRangeRef.current = sel.getRangeAt(0).cloneRange();
-                }
-              }}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => setFontSizeInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleApplyExactFontSize(fontSizeInput);
-                  e.currentTarget.blur();
-                }
-              }}
-              onBlur={() => {
-                handleApplyExactFontSize(fontSizeInput);
-              }}
-              title="Type font size in px and press Enter"
-              style={{
-                width: "28px",
-                height: "20px",
-                textAlign: "center",
-                border: "none",
-                background: "transparent",
-                fontSize: "11px",
-                fontWeight: "700",
-                color: "#0f172a",
-                padding: "0 1px",
-                outline: "none"
-              }}
-            />
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => handleChangeFontSize(1)}
-              title="Increase Font Size"
-              style={{
-                width: "20px",
-                height: "20px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "transparent",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                color: "#0f172a",
-                fontSize: "13px",
-                fontWeight: "700",
-                lineHeight: "1"
-              }}
-            >
-              +
-            </button>
-          </div>
-
-          <span style={{ width: "1px", height: "18px", background: "#e2e8f0", margin: "0 3px" }} />
-
-          {/* Alignment Icons */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => applyFormat("justifyLeft")}
-            title="Align Left"
-            style={{
-              padding: "5px 7px",
-              background: activeFormats.align === "left" ? "#eff6ff" : "none",
-              border: activeFormats.align === "left" ? "1px solid #93c5fd" : "1px solid transparent",
-              cursor: "pointer",
-              borderRadius: "6px",
-              color: activeFormats.align === "left" ? "#2563eb" : "#334155",
-              display: "flex",
-              alignItems: "center",
-              transition: "all 0.15s ease"
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <line x1="21" y1="6" x2="3" y2="6"></line>
-              <line x1="15" y1="12" x2="3" y2="12"></line>
-              <line x1="19" y1="18" x2="3" y2="18"></line>
-            </svg>
-          </button>
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => applyFormat("justifyCenter")}
-            title="Align Center"
-            style={{
-              padding: "5px 7px",
-              background: activeFormats.align === "center" ? "#eff6ff" : "none",
-              border: activeFormats.align === "center" ? "1px solid #93c5fd" : "1px solid transparent",
-              cursor: "pointer",
-              borderRadius: "6px",
-              color: activeFormats.align === "center" ? "#2563eb" : "#334155",
-              display: "flex",
-              alignItems: "center",
-              transition: "all 0.15s ease"
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="6"></line>
-              <line x1="21" y1="12" x2="3" y2="12"></line>
-              <line x1="18" y1="18" x2="6" y2="18"></line>
-            </svg>
-          </button>
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => applyFormat("justifyRight")}
-            title="Align Right"
-            style={{
-              padding: "5px 7px",
-              background: activeFormats.align === "right" ? "#eff6ff" : "none",
-              border: activeFormats.align === "right" ? "1px solid #93c5fd" : "1px solid transparent",
-              cursor: "pointer",
-              borderRadius: "6px",
-              color: activeFormats.align === "right" ? "#2563eb" : "#334155",
-              display: "flex",
-              alignItems: "center",
-              transition: "all 0.15s ease"
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <line x1="21" y1="6" x2="3" y2="6"></line>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
-              <line x1="21" y1="18" x2="5" y2="18"></line>
-            </svg>
-          </button>
-
-          <span style={{ width: "1px", height: "18px", background: "#e2e8f0", margin: "0 3px" }} />
-
-          {/* Quick Color Swatches */}
-          <div style={{ display: "flex", alignItems: "center", gap: "5px", padding: "0 3px" }}>
-            {[
-              { color: "#0f172a", title: "Black" },
-              { color: "#2563eb", title: "Royal Blue" },
-              { color: "#b45309", title: "Emaar Luxury Gold" },
-              { color: "#059669", title: "Emerald Green" },
-              { color: "#dc2626", title: "Crimson Red" },
-              { color: "#ffffff", title: "Pure White", border: "1px solid #cbd5e1" }
-            ].map((swatch, idx) => (
+              <span style={{ fontSize: "12px", fontWeight: "800", lineHeight: "1", color: "#0f172a" }}>A</span>
               <span
-                key={idx}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => applyFormat("foreColor", swatch.color)}
-                title={swatch.title}
+                className="color-bar-indicator word-fore-bar"
                 style={{
-                  width: "15px",
-                  height: "15px",
-                  borderRadius: "50%",
-                  background: swatch.color,
-                  cursor: "pointer",
-                  border: swatch.border || "1px solid #94a3b8",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-                  outline: activeFormats.color === swatch.color ? `2px solid ${swatch.color === "#ffffff" ? "#0f172a" : swatch.color}` : "none",
-                  outlineOffset: "1.5px",
-                  transform: activeFormats.color === swatch.color ? "scale(1.15)" : "scale(1)",
-                  transition: "all 0.15s ease"
+                  background: activeFormats.color || "#111111",
+                  boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.28)"
                 }}
               />
-            ))}
-
-            <label
-              title="Custom Color Picker"
-              onMouseDown={(e) => e.preventDefault()}
-              style={{ position: "relative", cursor: "pointer", display: "flex", alignItems: "center", marginLeft: "2px" }}
-            >
               <input
                 type="color"
+                className="word-fore-color"
+                value={activeFormats.color?.startsWith("#") ? activeFormats.color : "#111111"}
                 onChange={(e) => applyFormat("foreColor", e.target.value)}
-                style={{ position: "absolute", opacity: 0, width: "16px", height: "16px", cursor: "pointer" }}
               />
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M12 2a7 7 0 0 0-7 7c0 4 7 13 7 13s7-9 7-13a7 7 0 0 0-7-7z"></path>
-              </svg>
             </label>
           </div>
+
+          {/* GROUP 4: TEXT ALIGNMENT & REMOVE FORMAT */}
+          <div className="word-toolbar-group" style={{ borderRight: "none", paddingRight: 0, marginRight: 0 }}>
+            <button
+              type="button"
+              className={`word-tool-btn ${activeFormats.align === "left" ? "active" : ""}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => applyFormat("justifyLeft")}
+              onMouseEnter={(e) => showEditorTooltip(e, "Align Left")}
+              onMouseLeave={hideEditorTooltip}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <line x1="17" y1="10" x2="3" y2="10"></line>
+                <line x1="21" y1="6" x2="3" y2="6"></line>
+                <line x1="21" y1="14" x2="3" y2="14"></line>
+                <line x1="17" y1="18" x2="3" y2="18"></line>
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={`word-tool-btn ${activeFormats.align === "center" ? "active" : ""}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => applyFormat("justifyCenter")}
+              onMouseEnter={(e) => showEditorTooltip(e, "Align Center")}
+              onMouseLeave={hideEditorTooltip}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <line x1="18" y1="10" x2="6" y2="10"></line>
+                <line x1="21" y1="6" x2="3" y2="6"></line>
+                <line x1="21" y1="14" x2="3" y2="14"></line>
+                <line x1="18" y1="18" x2="6" y2="18"></line>
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={`word-tool-btn ${activeFormats.align === "right" ? "active" : ""}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => applyFormat("justifyRight")}
+              onMouseEnter={(e) => showEditorTooltip(e, "Align Right")}
+              onMouseLeave={hideEditorTooltip}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <line x1="21" y1="10" x2="7" y2="10"></line>
+                <line x1="21" y1="6" x2="3" y2="6"></line>
+                <line x1="21" y1="14" x2="3" y2="14"></line>
+                <line x1="21" y1="18" x2="7" y2="18"></line>
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="word-tool-btn"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                if (activeTextRef.current) {
+                  const target = activeTextRef.current;
+                  const handled = applyInlineFormatting(target, "removeFormat");
+                  if (!handled) {
+                    document.execCommand("removeFormat", false, null);
+                    target.style.removeProperty("font-weight");
+                    target.style.removeProperty("font-style");
+                    target.style.removeProperty("text-decoration");
+                    target.style.removeProperty("color");
+                    target.style.removeProperty("font-family");
+                    target.style.removeProperty("font-size");
+                    target.style.removeProperty("text-align");
+                  }
+                  updateActiveFormats(target);
+                  syncTextToCMS(target);
+                  showToast("Cleared formatting");
+                }
+              }}
+              onMouseEnter={(e) => showEditorTooltip(e, "Clear Formatting")}
+              onMouseLeave={hideEditorTooltip}
+              style={{ fontWeight: "700", fontSize: "11.5px" }}
+            >
+              Tx
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM LUXURY FLOATING TOOLTIP */}
+      {editorTooltip.visible && textPillBar.visible && (
+        <div
+          id="editorTooltipPortal"
+          style={{
+            position: "fixed",
+            left: `${editorTooltip.x}px`,
+            top: `${editorTooltip.y}px`,
+            transform: editorTooltip.placement === "bottom" ? "translate(-50%, 0)" : "translate(-50%, -100%)",
+            background: "#0f172a",
+            color: "#ffffff",
+            border: "1px solid rgba(255, 255, 255, 0.15)",
+            borderRadius: "6px",
+            padding: "4px 8px",
+            fontSize: "11px",
+            fontWeight: "600",
+            letterSpacing: "0.02em",
+            boxShadow: "0 8px 20px rgba(0,0,0,0.35)",
+            pointerEvents: "none",
+            zIndex: 100030,
+            whiteSpace: "nowrap"
+          }}
+        >
+          {editorTooltip.text}
+          <div
+            style={{
+              position: "absolute",
+              ...(editorTooltip.placement === "bottom"
+                ? {
+                    top: "-4px",
+                    left: "50%",
+                    transform: "translateX(-50%) rotate(45deg)",
+                    width: "7px",
+                    height: "7px",
+                    background: "#0f172a",
+                    borderLeft: "1px solid rgba(255, 255, 255, 0.15)",
+                    borderTop: "1px solid rgba(255, 255, 255, 0.15)"
+                  }
+                : {
+                    bottom: "-4px",
+                    left: "50%",
+                    transform: "translateX(-50%) rotate(45deg)",
+                    width: "7px",
+                    height: "7px",
+                    background: "#0f172a",
+                    borderRight: "1px solid rgba(255, 255, 255, 0.15)",
+                    borderBottom: "1px solid rgba(255, 255, 255, 0.15)"
+                  })
+            }}
+          />
         </div>
       )}
 
@@ -4793,26 +6301,47 @@ export default function VisualEditor() {
       />
 
       {/* ACTIVE ELEMENT TRANSFORM & RESIZE SELECTION FRAME (TIDY BOX, ZERO OVERLAP ON TEXT) */}
-      {activeBoxInfo && activeTextRef.current && (() => {
+      {activeBoxInfo && !activeBoxInfo.hidden && activeBoxInfo.width > 4 && activeBoxInfo.height > 4 && activeTextRef.current && document.body.contains(activeTextRef.current) && !isWebsiteModalOpen() && (() => {
         const pad = 6;
         const boxLeft = activeBoxInfo.left - pad;
         const boxTop = activeBoxInfo.top - pad;
         const boxWidth = activeBoxInfo.width + pad * 2;
         const boxHeight = activeBoxInfo.height + pad * 2;
-        // Detect small icons / logos: only show bounding box outline, no resize handles or drag borders
-        const isSmallIcon =
-          (activeBoxInfo.width <= 75 && activeBoxInfo.height <= 75) ||
-          activeBoxInfo.tag === "img" ||
-          activeBoxInfo.tag === "svg" ||
-          activeTextRef.current?.tagName === "IMG" ||
-          activeTextRef.current?.tagName === "SVG" ||
-          Boolean(activeTextRef.current?.closest("a")?.querySelector("img"));
         const isCompact = activeBoxInfo.width < 120 || activeBoxInfo.height < 55;
+        if (checkIsElementCoveredOrOffscreen(activeTextRef.current)) {
+          return null;
+        }
+
+        const isNavbarEl = Boolean(activeTextRef.current?.closest?.("header, nav, .site-header, .mega-panel, [data-testid='site-header-mega-panel']"));
+        const headerEl = typeof document !== "undefined" ? document.querySelector("header.site-header, header") : null;
+        const studioBarEl = typeof document !== "undefined" ? document.getElementById("visualEditorStudioBar") : null;
+        const studioBarBottom = studioBarEl ? studioBarEl.getBoundingClientRect().bottom : 48;
+        const headerBottom = headerEl ? headerEl.getBoundingClientRect().bottom : 0;
+        const topBarBottom = Math.max(headerBottom, studioBarBottom, 54);
+
+        // Completely scrolled under top limit
+        if (isNavbarEl) {
+          if (boxTop + boxHeight <= studioBarBottom + 2) {
+            return null;
+          }
+        } else {
+          if (boxTop + boxHeight <= topBarBottom + 2) {
+            return null;
+          }
+        }
+
+        const clipTopInset = isNavbarEl ? Math.max(0, studioBarBottom - boxTop) : Math.max(0, topBarBottom - boxTop);
+        const overlayZIndex = isNavbarEl ? 1000001 : 45; // Navbar elements get z-1000001 (above mega panel); content elements get z-45
 
         return (
           <div
             id="activeElementBoxOverlay"
             title={activeBoxInfo.tag || "Block"}
+            onMouseEnter={() => {
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("cms-keep-mega-open"));
+              }
+            }}
             style={{
               position: "fixed",
               left: `${boxLeft}px`,
@@ -4822,8 +6351,9 @@ export default function VisualEditor() {
               border: "1.5px solid #000000",
               borderRadius: "3px",
               pointerEvents: "none",
-              zIndex: 100000,
-              boxSizing: "border-box"
+              zIndex: overlayZIndex,
+              boxSizing: "border-box",
+              clipPath: clipTopInset > 0 ? `inset(${clipTopInset}px 0 0 0)` : undefined
             }}
           >
             {/* DRAGGABLE BOX INTERIOR (ALLOWS MOVING THE WHOLE BOX EASILY) */}
@@ -4834,202 +6364,173 @@ export default function VisualEditor() {
               }}
               onDoubleClick={(e) => {
                 e.stopPropagation();
-                enterTextEditing(activeTextRef.current, e.clientX, e.clientY);
+                if (activeTextRef.current?.tagName === "IMG") {
+                  handleOpenCrop({ el: activeTextRef.current, name: activeTextRef.current.alt || "Photo", type: "image" }, "main");
+                  return;
+                }
+                if (activeTextRef.current?.tagName === "VIDEO") {
+                  handleOpenVideoModal(activeTextRef.current, "main");
+                  return;
+                }
+                const btn = activeTextRef.current?.closest?.("button, [role='button'], a, .hdr-cta, [data-testid*='cta'], [aria-haspopup='dialog']") || (["BUTTON", "A"].includes(activeTextRef.current?.tagName) ? activeTextRef.current : null);
+                if (btn) {
+                  executeLiveElementAction(btn);
+                } else {
+                  enterTextEditing(activeTextRef.current, e.clientX, e.clientY);
+                }
               }}
               title={isTextEditing ? "" : "Click or double-click to edit text • Drag to move box"}
               style={{
                 position: "absolute",
                 inset: "2px",
                 cursor: isTextEditing ? "text" : "move",
-                pointerEvents: isTextEditing ? "none" : "auto",
+                pointerEvents: (
+                  isTextEditing ||
+                  activeTextRef.current?.tagName === "VIDEO" ||
+                  activeTextRef.current?.querySelector?.("video") ||
+                  activeTextRef.current?.closest?.('[data-testid="communities-block"], [data-testid="showcase-mosaic"]') ||
+                  activeTextRef.current?.isContentEditable ||
+                  ["P", "H1", "H2", "H3", "H4", "H5", "H6", "SPAN", "LABEL", "B", "STRONG", "EM", "I", "A", "LI", "BLOCKQUOTE"].includes(activeTextRef.current?.tagName)
+                ) ? "none" : "auto",
                 background: "transparent",
                 zIndex: 1
               }}
             />
 
-            {/* DRAGGABLE BORDER EDGES - DISABLED FOR SMALL ICONS */}
-            {!isSmallIcon && (
-              <>
-                <div
-                  onMouseDown={handleStartDragElement}
-                  title="Drag box to reposition"
-                  style={{
-                    position: "absolute",
-                    top: "-6px",
-                    left: "6px",
-                    right: "6px",
-                    height: "12px",
-                    cursor: "move",
-                    pointerEvents: "auto",
-                    background: "transparent"
-                  }}
-                />
-                <div
-                  onMouseDown={handleStartDragElement}
-                  title="Drag box to reposition"
-                  style={{
-                    position: "absolute",
-                    bottom: "-6px",
-                    left: "6px",
-                    right: "6px",
-                    height: "12px",
-                    cursor: "move",
-                    pointerEvents: "auto",
-                    background: "transparent"
-                  }}
-                />
-                <div
-                  onMouseDown={handleStartDragElement}
-                  title="Drag box to reposition"
-                  style={{
-                    position: "absolute",
-                    left: "-6px",
-                    top: "6px",
-                    bottom: "6px",
-                    width: "12px",
-                    cursor: "move",
-                    pointerEvents: "auto",
-                    background: "transparent"
-                  }}
-                />
-                <div
-                  onMouseDown={handleStartDragElement}
-                  title="Drag box to reposition"
-                  style={{
-                    position: "absolute",
-                    right: "-6px",
-                    top: "6px",
-                    bottom: "6px",
-                    width: "12px",
-                    cursor: "move",
-                    pointerEvents: "auto",
-                    background: "transparent"
-                  }}
-                />
-              </>
-            )}
+            {/* DRAGGABLE BORDER EDGES ON ALL 4 SIDES */}
+            <div
+              onMouseDown={handleStartDragElement}
+              title="Drag box to reposition"
+              style={{
+                position: "absolute",
+                top: "-6px",
+                left: "6px",
+                right: "6px",
+                height: "12px",
+                cursor: "move",
+                pointerEvents: "auto",
+                background: "transparent"
+              }}
+            />
+            <div
+              onMouseDown={handleStartDragElement}
+              title="Drag box to reposition"
+              style={{
+                position: "absolute",
+                bottom: "-6px",
+                left: "6px",
+                right: (activeTextRef.current?.tagName === "VIDEO" || activeTextRef.current?.querySelector?.("video") || activeTextRef.current?.closest?.('[data-testid="communities-block"]')) ? "80px" : "6px",
+                height: "12px",
+                cursor: "move",
+                pointerEvents: "auto",
+                background: "transparent"
+              }}
+            />
+            <div
+              onMouseDown={handleStartDragElement}
+              title="Drag box to reposition"
+              style={{
+                position: "absolute",
+                left: "-6px",
+                top: "6px",
+                bottom: "6px",
+                width: "12px",
+                cursor: "move",
+                pointerEvents: "auto",
+                background: "transparent"
+              }}
+            />
+            <div
+              onMouseDown={handleStartDragElement}
+              title="Drag box to reposition"
+              style={{
+                position: "absolute",
+                right: "-6px",
+                top: "6px",
+                bottom: "6px",
+                width: "12px",
+                cursor: "move",
+                pointerEvents: "auto",
+                background: "transparent"
+              }}
+            />
 
-            {/* CORNER RESIZE NODES:
-                For small icons: Two diagonal nodes (top-left & bottom-right) that proportionally scale the whole box.
-                For regular elements: All 4 corner nodes. */}
-            {isSmallIcon ? (
-              <>
-                <div
-                  onMouseDown={(e) => handleStartResizeElement(e, "tl")}
-                  title="Drag diagonally to scale whole box"
-                  style={{
-                    position: "absolute",
-                    left: "-4px",
-                    top: "-4px",
-                    width: "7px",
-                    height: "7px",
-                    background: "#ffffff",
-                    border: "1.5px solid #000000",
-                    borderRadius: "2px",
-                    cursor: "nwse-resize",
-                    pointerEvents: "auto",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                    zIndex: 4
-                  }}
-                />
-                <div
-                  onMouseDown={(e) => handleStartResizeElement(e, "se")}
-                  title="Drag diagonally to scale whole box"
-                  style={{
-                    position: "absolute",
-                    right: "-4px",
-                    bottom: "-4px",
-                    width: "7px",
-                    height: "7px",
-                    background: "#ffffff",
-                    border: "1.5px solid #000000",
-                    borderRadius: "2px",
-                    cursor: "nwse-resize",
-                    pointerEvents: "auto",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                    zIndex: 4
-                  }}
-                />
-              </>
-            ) : (
-              <>
-                <div
-                  onMouseDown={(e) => handleStartResizeElement(e, "tl")}
-                  title="Resize"
-                  style={{
-                    position: "absolute",
-                    left: "-4px",
-                    top: "-4px",
-                    width: "7px",
-                    height: "7px",
-                    background: "#ffffff",
-                    border: "1.5px solid #000000",
-                    borderRadius: "2px",
-                    cursor: "nwse-resize",
-                    pointerEvents: "auto",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                    zIndex: 4
-                  }}
-                />
-                <div
-                  onMouseDown={(e) => handleStartResizeElement(e, "tr")}
-                  title="Resize"
-                  style={{
-                    position: "absolute",
-                    right: "-4px",
-                    top: "-4px",
-                    width: "7px",
-                    height: "7px",
-                    background: "#ffffff",
-                    border: "1.5px solid #000000",
-                    borderRadius: "2px",
-                    cursor: "nesw-resize",
-                    pointerEvents: "auto",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                    zIndex: 4
-                  }}
-                />
-                <div
-                  onMouseDown={(e) => handleStartResizeElement(e, "se")}
-                  title="Resize"
-                  style={{
-                    position: "absolute",
-                    right: "-4px",
-                    bottom: "-4px",
-                    width: "7px",
-                    height: "7px",
-                    background: "#ffffff",
-                    border: "1.5px solid #000000",
-                    borderRadius: "2px",
-                    cursor: "nwse-resize",
-                    pointerEvents: "auto",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                    zIndex: 4
-                  }}
-                />
-                <div
-                  onMouseDown={(e) => handleStartResizeElement(e, "sw")}
-                  title="Resize"
-                  style={{
-                    position: "absolute",
-                    left: "-4px",
-                    bottom: "-4px",
-                    width: "7px",
-                    height: "7px",
-                    background: "#ffffff",
-                    border: "1.5px solid #000000",
-                    borderRadius: "2px",
-                    cursor: "nesw-resize",
-                    pointerEvents: "auto",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                    zIndex: 4
-                  }}
-                />
-              </>
-            )}
+            {/* ALL 4 CORNER RESIZE NODES: Top-Left, Top-Right, Bottom-Right, Bottom-Left */}
+            <div
+              onMouseDown={(e) => handleStartResizeElement(e, "tl")}
+              title="Resize"
+              style={{
+                position: "absolute",
+                left: "-4px",
+                top: "-4px",
+                width: "8px",
+                height: "8px",
+                background: "#ffffff",
+                border: "1.5px solid #000000",
+                borderRadius: "2px",
+                cursor: "nwse-resize",
+                pointerEvents: "auto",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                zIndex: 4
+              }}
+            />
+            <div
+              onMouseDown={(e) => handleStartResizeElement(e, "tr")}
+              title="Resize"
+              style={{
+                position: "absolute",
+                right: "-4px",
+                top: "-4px",
+                width: "8px",
+                height: "8px",
+                background: "#ffffff",
+                border: "1.5px solid #000000",
+                borderRadius: "2px",
+                cursor: "nesw-resize",
+                pointerEvents: "auto",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                zIndex: 4
+              }}
+            />
+            <div
+              onMouseDown={(e) => handleStartResizeElement(e, "se")}
+              title="Resize"
+              style={{
+                position: "absolute",
+                right: "-4px",
+                bottom: "-4px",
+                width: "8px",
+                height: "8px",
+                background: "#ffffff",
+                border: "1.5px solid #000000",
+                borderRadius: "2px",
+                cursor: "nwse-resize",
+                pointerEvents: "auto",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                zIndex: 4
+              }}
+            />
+            <div
+              onMouseDown={(e) => handleStartResizeElement(e, "sw")}
+              title="Resize"
+              style={{
+                position: "absolute",
+                left: "-4px",
+                bottom: "-4px",
+                width: "8px",
+                height: "8px",
+                background: "#ffffff",
+                border: "1.5px solid #000000",
+                borderRadius: "2px",
+                cursor: "nesw-resize",
+                pointerEvents: "auto",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                zIndex: 4
+              }}
+            />
 
             {/* Edge handles only for large containers */}
-            {!isSmallIcon && !isCompact && (
+            {!isCompact && (
               <>
                 <div
                   onMouseDown={(e) => handleStartResizeElement(e, "e")}
@@ -5444,6 +6945,12 @@ export default function VisualEditor() {
               <div
                 contentEditable
                 suppressContentEditableWarning
+                onFocus={(e) => {
+                  activeTextRef.current = e.currentTarget;
+                  setIsTextEditing(true);
+                  updateBoxRect(e.currentTarget, true);
+                  updateActiveFormats(e.currentTarget);
+                }}
                 onInput={(e) => {
                   const val = e.currentTarget.innerText;
                   const newH = e.currentTarget.offsetHeight || e.currentTarget.scrollHeight;
@@ -5459,6 +6966,8 @@ export default function VisualEditor() {
                   setDrawnShapes((prev) =>
                     prev.map((s) => (s.id === shape.id ? { ...s, text: val, height: Math.max(s.height || 48, newH || 48) } : s))
                   );
+                  setIsTextEditing(false);
+                  setTextPillBar((prev) => ({ ...prev, visible: false }));
                 }}
                 style={{
                   width: "100%",
@@ -5822,9 +7331,70 @@ export default function VisualEditor() {
                 </button>
               </div>
             </div>
-            <div className="library-thin-scroll" style={{ padding: "16px 22px", maxHeight: "calc(100vh - 220px)", overflowY: "auto", background: "#ffffff", flex: 1 }}>
+            {/* TABS: ALL / IMAGES / VIDEOS */}
+            <div style={{ display: "flex", gap: "8px", padding: "10px 22px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+              <button
+                type="button"
+                onClick={() => setMediaLibraryTab("all")}
+                style={{
+                  padding: "5px 14px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: "none",
+                  background: mediaLibraryTab === "all" ? "#0f172a" : "transparent",
+                  color: mediaLibraryTab === "all" ? "#ffffff" : "#64748b",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                All Media ({mediaFiles.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMediaLibraryTab("images")}
+                style={{
+                  padding: "5px 14px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: "none",
+                  background: mediaLibraryTab === "images" ? "#0f172a" : "transparent",
+                  color: mediaLibraryTab === "images" ? "#ffffff" : "#64748b",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                🖼️ Images ({mediaFiles.filter((m) => !/\.(mp4|webm|ogg)$/i.test(m.url)).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMediaLibraryTab("videos")}
+                style={{
+                  padding: "5px 14px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: "none",
+                  background: mediaLibraryTab === "videos" ? "#0f172a" : "transparent",
+                  color: mediaLibraryTab === "videos" ? "#ffffff" : "#64748b",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                🎬 Videos ({mediaFiles.filter((m) => /\.(mp4|webm|ogg)$/i.test(m.url)).length})
+              </button>
+            </div>
+            <div className="library-thin-scroll" style={{ padding: "16px 22px", maxHeight: "calc(100vh - 260px)", overflowY: "auto", background: "#ffffff", flex: 1 }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "14px" }}>
-                {mediaFiles.map((f, i) => {
+                {mediaFiles
+                  .filter((f) => {
+                    const isVideo = /\.(mp4|webm|ogg)$/i.test(f.url);
+                    if (mediaLibraryTab === "images") return !isVideo;
+                    if (mediaLibraryTab === "videos") return isVideo;
+                    return true;
+                  })
+                  .map((f, i) => {
                   const isSelected = selectedMedia?.url === f.url;
                   return (
                     <div
@@ -5903,8 +7473,8 @@ export default function VisualEditor() {
       {/* 4. MODAL: CROP & FRAMING */}
       {cropModalOpen && (() => {
         const cropTargetImgSrc = (() => {
-          if (!selectedLayer?.el) return "";
-          const el = selectedLayer.el;
+          const el = selectedLayer?.el || activeTextRef.current;
+          if (!el) return "";
           if (el.tagName === "IMG") return el.currentSrc || el.src || "";
           const childImg = el.querySelector?.("img");
           if (childImg) return childImg.currentSrc || childImg.src || "";
@@ -5918,6 +7488,8 @@ export default function VisualEditor() {
           return "";
         })();
 
+        const currentActiveImgSrc = cropImgSrc || cropTargetImgSrc;
+
         const handleCanvasPointer = (e) => {
           const rect = e.currentTarget.getBoundingClientRect();
           if (rect.width > 0 && rect.height > 0) {
@@ -5929,24 +7501,90 @@ export default function VisualEditor() {
         };
 
         return (
-          <div style={{ position: "fixed", top: "48px", left: 0, right: 0, bottom: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(6px)", zIndex: 2000010, display: "flex", alignItems: "center", justifyContent: "center", padding: "14px" }}>
-            <div style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "14px", width: "100%", maxWidth: "660px", maxHeight: "88vh", display: "flex", flexDirection: "column", color: "#0f172a", overflow: "hidden", boxShadow: "0 20px 50px -12px rgba(15,23,42,0.35), 0 0 0 1px rgba(0,0,0,0.06)" }}>
+          <div
+            style={{
+              position: "fixed",
+              top: "48px",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(15, 23, 42, 0.65)",
+              backdropFilter: "blur(6px)",
+              zIndex: 2000010,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "14px"
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setCropModalOpen(false);
+            }}
+          >
+            <div
+              style={{
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "14px",
+                width: "100%",
+                maxWidth: "680px",
+                maxHeight: "min(86vh, 670px)",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                boxShadow: "0 25px 60px -15px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.05)"
+              }}
+            >
               {/* Modal Header */}
-              <div style={{ padding: "10px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#ffffff", flexShrink: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{ width: "26px", height: "26px", borderRadius: "6px", background: "#0f172a", color: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M6 2v14a2 2 0 0 0 2 2h14" />
-                      <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+              <div
+                style={{
+                  padding: "14px 20px",
+                  borderBottom: "1px solid #f1f5f9",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "#ffffff"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "8px",
+                      background: "#0f172a",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#ffffff"
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2v14a2 2 0 0 0 2 2h14"></path>
+                      <path d="M18 22V8a2 2 0 0 0-2-2H2"></path>
                     </svg>
                   </div>
                   <div>
-                    <h3 style={{ fontSize: "13.5px", fontWeight: "700", color: "#0f172a", letterSpacing: "-0.01em", margin: 0 }}>Photo Editor Framing</h3>
+                    <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", margin: 0 }}>
+                      Photo Settings & Framing
+                    </h3>
+                    <p style={{ fontSize: "11.5px", color: "#64748b", margin: 0, marginTop: "1px" }}>
+                      Live Preview, Object-Fit Framing & Source Replacement
+                    </p>
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setCropModalOpen(false)}
-                  style={{ background: "transparent", border: "none", color: "#94a3b8", fontSize: "20px", cursor: "pointer", lineHeight: 1, padding: "2px 6px", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#94a3b8",
+                    fontSize: "22px",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                    padding: "4px 8px",
+                    borderRadius: "6px"
+                  }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = "#0f172a"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = "#94a3b8"; }}
                 >
@@ -5954,372 +7592,1868 @@ export default function VisualEditor() {
                 </button>
               </div>
 
-              {/* Modal Body: 2-Column Studio Layout */}
-              <div style={{ padding: "14px 18px", background: "#ffffff", overflowY: "auto", display: "grid", gridTemplateColumns: "260px 1fr", gap: "16px", alignItems: "start" }}>
-                {/* LEFT COLUMN: Live Studio Viewport & Presets */}
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "10.5px", fontWeight: "700", letterSpacing: "0.04em", textTransform: "uppercase", color: "#475569" }}>
-                      Framing Viewport
-                    </span>
-                    {/* Cover / Contain Toggle */}
-                    <div style={{ display: "flex", gap: "2px", background: "#f1f5f9", padding: "2px", borderRadius: "5px", border: "1px solid #e2e8f0" }}>
-                      <button
-                        type="button"
-                        onClick={() => setCropFit("cover")}
-                        style={{
-                          border: "none",
-                          padding: "2px 7px",
-                          borderRadius: "4px",
-                          fontSize: "10.5px",
-                          fontWeight: "600",
-                          cursor: "pointer",
-                          background: cropFit === "cover" ? "#0f172a" : "transparent",
-                          color: cropFit === "cover" ? "#ffffff" : "#64748b",
-                          transition: "all 0.15s ease"
-                        }}
-                      >
-                        Cover
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCropFit("contain")}
-                        style={{
-                          border: "none",
-                          padding: "2px 7px",
-                          borderRadius: "4px",
-                          fontSize: "10.5px",
-                          fontWeight: "600",
-                          cursor: "pointer",
-                          background: cropFit === "contain" ? "#0f172a" : "transparent",
-                          color: cropFit === "contain" ? "#ffffff" : "#64748b",
-                          transition: "all 0.15s ease"
-                        }}
-                      >
-                        Contain
-                      </button>
-                    </div>
-                  </div>
-
-                  <div
-                    onPointerDown={(e) => {
-                      e.currentTarget.setPointerCapture?.(e.pointerId);
-                      handleCanvasPointer(e);
-                    }}
-                    onPointerMove={(e) => {
-                      if (e.buttons === 1) handleCanvasPointer(e);
-                    }}
+              {/* Subheader when in sub-screens (reframe or replace) */}
+              {cropModalTab !== "main" && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "9px 18px",
+                    background: "#f8fafc",
+                    borderBottom: "1px solid #e2e8f0"
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setCropModalTab("main")}
                     style={{
-                      position: "relative",
-                      width: "100%",
-                      height: "165px",
-                      background: "#09090b",
-                      borderRadius: "8px",
-                      overflow: "hidden",
-                      border: "1px solid #1e293b",
-                      cursor: "crosshair",
-                      userSelect: "none",
-                      boxShadow: "inset 0 2px 8px rgba(0,0,0,0.5)"
+                      background: "#ffffff",
+                      border: "1px solid #cbd5e1",
+                      color: "#0f172a",
+                      fontSize: "11.5px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "4px 10px",
+                      borderRadius: "6px",
+                      transition: "all 0.15s ease"
                     }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; }}
                   >
-                    {cropTargetImgSrc ? (
-                      <img
-                        src={cropTargetImgSrc}
-                        alt="Framing Canvas"
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: cropFit,
-                          objectPosition: `${cropPosX}% ${cropPosY}%`,
-                          transform: `scale(${cropScale / 100})`,
-                          transition: "transform 0.08s ease-out, object-position 0.08s ease-out",
-                          pointerEvents: "none"
-                        }}
-                      />
-                    ) : (
-                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "11px" }}>
-                        Preview Target Active
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="19" y1="12" x2="5" y2="12"></line>
+                      <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    <span>Back to Photo Preview</span>
+                  </button>
+                  <span style={{ fontSize: "12px", fontWeight: "700", color: "#334155" }}>
+                    {cropModalTab === "reframe" ? "Edit Frame & Focus" : "Replace Photo Source"}
+                  </span>
+                </div>
+              )}
+
+              {/* Modal Body */}
+              <div
+                className="library-thin-scroll"
+                style={{
+                  flex: 1,
+                  overflowY: "auto",
+                  padding: "16px 20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "14px"
+                }}
+              >
+                {/* SCREEN 1: MAIN CLEAN PREVIEW WITH 'EDIT FRAME' & 'REPLACE' BUTTONS */}
+                {cropModalTab === "main" && (
+                  <>
+                    {/* PREVIEW VIEWPORT CONTROLS */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 2px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "11px", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                          Preview Mode:
+                        </span>
+                        <div style={{ display: "inline-flex", background: "#f1f5f9", padding: "2px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                          {[
+                            { id: "contain", label: "Fit Original" },
+                            { id: "16/9", label: "16:9 Landscape" },
+                            { id: "hero", label: "Hero Panoramic" },
+                            { id: "4/3", label: "4:3 Standard" },
+                            { id: "1/1", label: "1:1 Square" }
+                          ].map((pm) => (
+                            <button
+                              key={pm.id}
+                              type="button"
+                              onClick={() => setCropPreviewMode(pm.id)}
+                              style={{
+                                padding: "4px 10px",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                                borderRadius: "4px",
+                                border: "none",
+                                cursor: "pointer",
+                                background: cropPreviewMode === pm.id ? "#0f172a" : "transparent",
+                                color: cropPreviewMode === pm.id ? "#ffffff" : "#64748b",
+                                transition: "all 0.15s ease"
+                              }}
+                            >
+                              {pm.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    )}
+                    </div>
 
-                    {/* Rule of Thirds Grid Overlay */}
-                    <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                      {/* Vertical Grid Lines */}
-                      <div style={{ position: "absolute", top: 0, bottom: 0, left: "33.33%", width: "1px", background: "rgba(255,255,255,0.22)", borderRight: "1px dashed rgba(0,0,0,0.3)" }} />
-                      <div style={{ position: "absolute", top: 0, bottom: 0, left: "66.66%", width: "1px", background: "rgba(255,255,255,0.22)", borderRight: "1px dashed rgba(0,0,0,0.3)" }} />
-                      {/* Horizontal Grid Lines */}
-                      <div style={{ position: "absolute", left: 0, right: 0, top: "33.33%", height: "1px", background: "rgba(255,255,255,0.22)", borderBottom: "1px dashed rgba(0,0,0,0.3)" }} />
-                      <div style={{ position: "absolute", left: 0, right: 0, top: "66.66%", height: "1px", background: "rgba(255,255,255,0.22)", borderBottom: "1px dashed rgba(0,0,0,0.3)" }} />
+                    {/* LIVE PHOTO PREVIEW CONTAINER */}
+                    <div
+                      style={{
+                        position: "relative",
+                        width: "100%",
+                        aspectRatio: cropPreviewMode === "hero" ? "21 / 9" : (cropPreviewMode === "16/9" ? "16 / 9" : (cropPreviewMode === "4/3" ? "4 / 3" : (cropPreviewMode === "1/1" ? "1 / 1" : "16 / 9"))),
+                        maxHeight: "260px",
+                        margin: "0 auto",
+                        background: "#050507",
+                        borderRadius: "10px",
+                        overflow: "hidden",
+                        border: "1px solid #1e293b",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.25)",
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      {currentActiveImgSrc ? (
+                        <img
+                          src={currentActiveImgSrc}
+                          alt="Photo Preview"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: cropPreviewMode === "contain" ? "contain" : cropFit,
+                            objectPosition: `${cropPosX}% ${cropPosY}%`,
+                            transform: `scale(${cropScale / 100})`,
+                            transition: "transform 0.15s ease, object-position 0.15s ease"
+                          }}
+                        />
+                      ) : (
+                        <div style={{ color: "#94a3b8", fontSize: "12px" }}>No photo source specified</div>
+                      )}
 
-                      {/* Corner Framing L-Brackets */}
-                      <div style={{ position: "absolute", top: "6px", left: "6px", width: "10px", height: "10px", borderTop: "2px solid rgba(255,255,255,0.85)", borderLeft: "2px solid rgba(255,255,255,0.85)" }} />
-                      <div style={{ position: "absolute", top: "6px", right: "6px", width: "10px", height: "10px", borderTop: "2px solid rgba(255,255,255,0.85)", borderRight: "2px solid rgba(255,255,255,0.85)" }} />
-                      <div style={{ position: "absolute", bottom: "6px", left: "6px", width: "10px", height: "10px", borderBottom: "2px solid rgba(255,255,255,0.85)", borderLeft: "2px solid rgba(255,255,255,0.85)" }} />
-                      <div style={{ position: "absolute", bottom: "6px", right: "6px", width: "10px", height: "10px", borderBottom: "2px solid rgba(255,255,255,0.85)", borderRight: "2px solid rgba(255,255,255,0.85)" }} />
-
-                      {/* Focal Point Reticle Crosshairs */}
+                      {/* Live Preview Badge */}
                       <div
                         style={{
                           position: "absolute",
-                          left: `${cropPosX}%`,
-                          top: `${cropPosY}%`,
-                          width: "22px",
-                          height: "22px",
-                          transform: "translate(-50%, -50%)",
-                          borderRadius: "50%",
-                          border: "2px solid #ffffff",
-                          boxShadow: "0 0 0 1px rgba(0,0,0,0.7), 0 0 8px rgba(0,0,0,0.8)",
+                          top: "10px",
+                          left: "10px",
+                          background: "rgba(15, 23, 42, 0.8)",
+                          backdropFilter: "blur(6px)",
+                          color: "#f8fafc",
+                          padding: "3px 9px",
+                          borderRadius: "5px",
+                          fontSize: "10.5px",
+                          fontWeight: "600",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          pointerEvents: "none",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.3)"
+                        }}
+                      >
+                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e", display: "inline-block", boxShadow: "0 0 6px #22c55e" }}></span>
+                        <span>LIVE PREVIEW</span>
+                        <span style={{ opacity: 0.6 }}>|</span>
+                        <span style={{ opacity: 0.9 }}>{cropScale}% &bull; {cropPreviewMode === "contain" ? "contain" : cropFit}</span>
+                      </div>
+                    </div>
+
+                    {/* TWO BIG CLEAN ACTION BUTTONS: 'EDIT FRAME' & 'REPLACE' */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "4px" }}>
+                      <button
+                        type="button"
+                        onClick={() => setCropModalTab("reframe")}
+                        style={{
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          transition: "left 0.08s ease-out, top 0.08s ease-out"
+                          gap: "8px",
+                          padding: "13px 20px",
+                          background: "#ffffff",
+                          border: "1.5px solid #0f172a",
+                          borderRadius: "9px",
+                          color: "#0f172a",
+                          fontSize: "13px",
+                          fontWeight: "700",
+                          cursor: "pointer",
+                          boxShadow: "0 2px 8px rgba(15, 23, 42, 0.06)",
+                          transition: "all 0.15s ease"
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#0f172a";
+                          e.currentTarget.style.color = "#ffffff";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "#ffffff";
+                          e.currentTarget.style.color = "#0f172a";
                         }}
                       >
-                        <div style={{ width: "4px", height: "4px", borderRadius: "50%", background: "#ffffff" }} />
-                        <div style={{ position: "absolute", width: "10px", height: "1px", background: "rgba(255,255,255,0.9)" }} />
-                        <div style={{ position: "absolute", height: "10px", width: "1px", background: "rgba(255,255,255,0.9)" }} />
-                      </div>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M6 2v14a2 2 0 0 0 2 2h14"></path>
+                          <path d="M18 22V8a2 2 0 0 0-2-2H2"></path>
+                        </svg>
+                        <span>Edit Frame</span>
+                      </button>
 
-                      {/* Canvas Overlay Tag */}
-                      <div style={{ position: "absolute", bottom: "6px", left: "8px", background: "rgba(15,23,42,0.75)", backdropFilter: "blur(3px)", padding: "1px 6px", borderRadius: "3px", color: "#e2e8f0", fontSize: "9px", fontWeight: "600" }}>
-                        Click/drag to focus
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCropModalTab("replace")}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "8px",
+                          padding: "13px 20px",
+                          background: "#0f172a",
+                          border: "1.5px solid #0f172a",
+                          borderRadius: "9px",
+                          color: "#ffffff",
+                          fontSize: "13px",
+                          fontWeight: "700",
+                          cursor: "pointer",
+                          boxShadow: "0 4px 12px rgba(15, 23, 42, 0.2)",
+                          transition: "all 0.15s ease"
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#1e293b";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "#0f172a";
+                        }}
+                      >
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                          <polyline points="17 8 12 3 7 8"></polyline>
+                          <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <span>Replace</span>
+                      </button>
                     </div>
-                  </div>
 
-                  {/* Preset Shortcuts (Compact) */}
-                  <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginTop: "8px" }}>
-                    <button
-                      type="button"
-                      onClick={() => { setCropPosX(50); setCropPosY(50); }}
-                      style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontSize: "10px", fontWeight: "600", padding: "2px 7px", borderRadius: "4px", cursor: "pointer" }}
+                    {/* ACTIVE PHOTO SPEC INFO CARD */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        padding: "10px 14px",
+                        marginTop: "2px"
+                      }}
                     >
-                      Center
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setCropPosX(50); setCropPosY(0); }}
-                      style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontSize: "10px", fontWeight: "600", padding: "2px 7px", borderRadius: "4px", cursor: "pointer" }}
-                    >
-                      Top
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setCropPosX(50); setCropPosY(100); }}
-                      style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontSize: "10px", fontWeight: "600", padding: "2px 7px", borderRadius: "4px", cursor: "pointer" }}
-                    >
-                      Bottom
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setCropScale(100); setCropPosX(50); setCropPosY(50); setCropFit("cover"); }}
-                      style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#64748b", fontSize: "10px", fontWeight: "600", padding: "2px 7px", borderRadius: "4px", cursor: "pointer" }}
-                    >
-                      ↺ Reset
-                    </button>
-                  </div>
-                </div>
-
-                {/* RIGHT COLUMN: 3 Calibrated Photo Editor Rollers */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {/* ROLLER 1: Zoom Scale */}
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span style={{ fontSize: "10.5px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.04em", color: "#334155" }}>
-                          Zoom Roller
+                      <div style={{ minWidth: 0, paddingRight: "10px" }}>
+                        <span style={{ fontSize: "10.5px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", display: "block" }}>
+                          Active Photo Source
+                        </span>
+                        <span style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                          {currentActiveImgSrc || "No source"}
                         </span>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <button
-                          type="button"
-                          onClick={() => setCropScale((v) => Math.max(100, v - 5))}
-                          style={{ width: "19px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #cbd5e1", background: "#f8fafc", borderRadius: "3px", fontSize: "11px", fontWeight: "700", cursor: "pointer", color: "#334155" }}
-                        >
-                          -
-                        </button>
-                        <span style={{ fontSize: "10.5px", fontWeight: "700", fontFamily: "monospace", color: "#0f172a", background: "#f1f5f9", border: "1px solid #cbd5e1", padding: "1px 6px", borderRadius: "4px", minWidth: "48px", textAlign: "center" }}>
-                          {(cropScale / 100).toFixed(2)}x
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <span style={{ fontSize: "10.5px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", display: "block" }}>
+                          Framing Status
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setCropScale((v) => Math.min(250, v + 5))}
-                          style={{ width: "19px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #cbd5e1", background: "#f8fafc", borderRadius: "3px", fontSize: "11px", fontWeight: "700", cursor: "pointer", color: "#334155" }}
-                        >
-                          +
-                        </button>
+                        <span style={{ fontSize: "12px", fontWeight: "700", color: "#2563eb" }}>
+                          {cropScale}% &bull; {cropFit} &bull; X:{cropPosX}% Y:{cropPosY}%
+                        </span>
                       </div>
                     </div>
-                    <input
-                      type="range"
-                      min="100"
-                      max="250"
-                      step="1"
-                      value={cropScale}
-                      onChange={(e) => setCropScale(Number(e.target.value))}
-                      style={{ width: "100%", accentColor: "#0f172a", cursor: "ew-resize", display: "block", margin: "2px 0 0 0" }}
-                    />
-                    {/* Calibrated Ruler Ticks */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 2px", marginTop: "2px" }}>
-                      {[...Array(21)].map((_, i) => (
-                        <div
-                          key={i}
+                  </>
+                )}
+
+                {/* SCREEN 2: EDIT REFRAME CONTROLS */}
+                {cropModalTab === "reframe" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    {/* Compact Live Photo Preview while reframing */}
+                    <div
+                      style={{
+                        position: "relative",
+                        width: "100%",
+                        aspectRatio: "21 / 9",
+                        maxHeight: "150px",
+                        background: "#050507",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        border: "1px solid #1e293b",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      {currentActiveImgSrc && (
+                        <img
+                          src={currentActiveImgSrc}
+                          alt="Photo Framing Preview"
                           style={{
-                            width: "1px",
-                            height: i % 5 === 0 ? "5px" : "3px",
-                            background: i % 5 === 0 ? "#64748b" : "#cbd5e1"
+                            width: "100%",
+                            height: "100%",
+                            objectFit: cropFit,
+                            objectPosition: `${cropPosX}% ${cropPosY}%`,
+                            transform: `scale(${cropScale / 100})`
                           }}
                         />
-                      ))}
+                      )}
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: "6px",
+                          left: "8px",
+                          background: "rgba(15, 23, 42, 0.8)",
+                          color: "#f8fafc",
+                          padding: "2px 7px",
+                          borderRadius: "4px",
+                          fontSize: "9.5px",
+                          fontWeight: "600"
+                        }}
+                      >
+                        {cropScale}% &bull; {cropFit} &bull; X:{cropPosX}% Y:{cropPosY}%
+                      </div>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#64748b", marginTop: "1px", fontWeight: "500" }}>
-                      <span onClick={() => setCropScale(100)} style={{ cursor: "pointer" }}>1.0x (Fit)</span>
-                      <span onClick={() => setCropScale(175)} style={{ cursor: "pointer" }}>1.75x</span>
-                      <span onClick={() => setCropScale(250)} style={{ cursor: "pointer" }}>2.5x (Max)</span>
+
+                    {/* Framing Fit (Object-Fit) */}
+                    <div>
+                      <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: "#334155", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                        Framing Fit (Object-Fit)
+                      </label>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                        {[
+                          { id: "cover", label: "Cover (Fill & Crop)" },
+                          { id: "contain", label: "Contain (Boxed)" },
+                          { id: "fill", label: "Fill (Stretch)" }
+                        ].map((fit) => (
+                          <button
+                            key={fit.id}
+                            type="button"
+                            onClick={() => setCropFit(fit.id)}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: "7px",
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              cursor: "pointer",
+                              border: cropFit === fit.id ? "1.5px solid #0f172a" : "1px solid #cbd5e1",
+                              background: cropFit === fit.id ? "#0f172a" : "#ffffff",
+                              color: cropFit === fit.id ? "#ffffff" : "#334155",
+                              transition: "all 0.15s ease"
+                            }}
+                          >
+                            {fit.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Scale & Zoom Slider */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                        <span style={{ fontSize: "11px", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                          Scale & Zoom
+                        </span>
+                        <span style={{ fontSize: "12px", fontWeight: "700", color: "#0f172a" }}>
+                          {cropScale}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="100"
+                        max="200"
+                        step="5"
+                        value={cropScale}
+                        onChange={(e) => setCropScale(Number(e.target.value))}
+                        style={{ width: "100%", accentColor: "#0f172a", cursor: "pointer" }}
+                      />
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#64748b", marginTop: "2px" }}>
+                        <span onClick={() => setCropScale(100)} style={{ cursor: "pointer" }}>100% (Default)</span>
+                        <span onClick={() => setCropScale(130)} style={{ cursor: "pointer" }}>130%</span>
+                        <span onClick={() => setCropScale(160)} style={{ cursor: "pointer" }}>160% (Close-up)</span>
+                        <span onClick={() => setCropScale(200)} style={{ cursor: "pointer" }}>200%</span>
+                      </div>
+                    </div>
+
+                    {/* Horizontal & Vertical Pan Sliders */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                          <span style={{ fontSize: "11px", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                            Horizontal Pan (Focus X)
+                          </span>
+                          <span style={{ fontSize: "12px", fontWeight: "700", color: "#0f172a" }}>
+                            {cropPosX}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={cropPosX}
+                          onChange={(e) => setCropPosX(Number(e.target.value))}
+                          style={{ width: "100%", accentColor: "#0f172a", cursor: "pointer" }}
+                        />
+                        <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+                          {[
+                            { label: "Left (0%)", val: 0 },
+                            { label: "Center (50%)", val: 50 },
+                            { label: "Right (100%)", val: 100 }
+                          ].map((b) => (
+                            <button
+                              key={b.val}
+                              type="button"
+                              onClick={() => setCropPosX(b.val)}
+                              style={{
+                                flex: 1,
+                                padding: "4px 0",
+                                fontSize: "10.5px",
+                                fontWeight: "600",
+                                border: "1px solid #cbd5e1",
+                                background: cropPosX === b.val ? "#f1f5f9" : "#ffffff",
+                                color: "#334155",
+                                borderRadius: "4px",
+                                cursor: "pointer"
+                              }}
+                            >
+                              {b.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                          <span style={{ fontSize: "11px", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                            Vertical Pan (Focus Y)
+                          </span>
+                          <span style={{ fontSize: "12px", fontWeight: "700", color: "#0f172a" }}>
+                            {cropPosY}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={cropPosY}
+                          onChange={(e) => setCropPosY(Number(e.target.value))}
+                          style={{ width: "100%", accentColor: "#0f172a", cursor: "pointer" }}
+                        />
+                        <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+                          {[
+                            { label: "Top (0%)", val: 0 },
+                            { label: "Center (50%)", val: 50 },
+                            { label: "Bottom (100%)", val: 100 }
+                          ].map((b) => (
+                            <button
+                              key={b.val}
+                              type="button"
+                              onClick={() => setCropPosY(b.val)}
+                              style={{
+                                flex: 1,
+                                padding: "4px 0",
+                                fontSize: "10.5px",
+                                fontWeight: "600",
+                                border: "1px solid #cbd5e1",
+                                background: cropPosY === b.val ? "#f1f5f9" : "#ffffff",
+                                color: "#334155",
+                                borderRadius: "4px",
+                                cursor: "pointer"
+                              }}
+                            >
+                              {b.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Interactive 2D Focus Canvas Pad */}
+                    <div>
+                      <span style={{ display: "block", fontSize: "11px", fontWeight: "700", color: "#334155", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                        Interactive Focus Pad (Click to Set Framing Target)
+                      </span>
+                      <div
+                        onClick={handleCanvasPointer}
+                        onMouseMove={(e) => {
+                          if (e.buttons === 1) handleCanvasPointer(e);
+                        }}
+                        style={{
+                          position: "relative",
+                          width: "100%",
+                          height: "90px",
+                          background: "#f1f5f9",
+                          border: "1.5px dashed #cbd5e1",
+                          borderRadius: "8px",
+                          cursor: "crosshair",
+                          overflow: "hidden"
+                        }}
+                      >
+                        <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: "1px", background: "#cbd5e1" }}></div>
+                        <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: "1px", background: "#cbd5e1" }}></div>
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: `${cropPosX}%`,
+                            top: `${cropPosY}%`,
+                            transform: "translate(-50%, -50%)",
+                            width: "16px",
+                            height: "16px",
+                            borderRadius: "50%",
+                            background: "#0f172a",
+                            border: "2px solid #ffffff",
+                            boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                            pointerEvents: "none"
+                          }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
+                )}
 
-                  {/* ROLLER 2: Horizontal Focal Position (X) */}
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span style={{ fontSize: "10.5px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.04em", color: "#334155" }}>
-                          Focal Roller X
-                        </span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <button
-                          type="button"
-                          onClick={() => setCropPosX((v) => Math.max(0, v - 5))}
-                          style={{ width: "19px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #cbd5e1", background: "#f8fafc", borderRadius: "3px", fontSize: "11px", fontWeight: "700", cursor: "pointer", color: "#334155" }}
-                        >
-                          -
-                        </button>
-                        <span style={{ fontSize: "10.5px", fontWeight: "700", fontFamily: "monospace", color: "#0f172a", background: "#f1f5f9", border: "1px solid #cbd5e1", padding: "1px 6px", borderRadius: "4px", minWidth: "48px", textAlign: "center" }}>
-                          X: {cropPosX}%
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setCropPosX((v) => Math.min(100, v + 5))}
-                          style={{ width: "19px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #cbd5e1", background: "#f8fafc", borderRadius: "3px", fontSize: "11px", fontWeight: "700", cursor: "pointer", color: "#334155" }}
-                        >
-                          +
-                        </button>
-                      </div>
+                {/* SCREEN 3: REPLACE PHOTO SOURCE */}
+                {cropModalTab === "replace" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    {/* Upload new photo */}
+                    <div
+                      style={{
+                        border: "2px dashed #cbd5e1",
+                        borderRadius: "8px",
+                        padding: "16px",
+                        textAlign: "center",
+                        background: "#f8fafc",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px"
+                      }}
+                    >
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                      <span style={{ fontSize: "12px", fontWeight: "600", color: "#1e293b" }}>Upload New Photo</span>
+                      <span style={{ fontSize: "10.5px", color: "#64748b" }}>Supports JPG, PNG, WEBP, SVG files</span>
+                      <label
+                        style={{
+                          marginTop: "4px",
+                          background: "#0f172a",
+                          color: "#ffffff",
+                          padding: "6px 16px",
+                          borderRadius: "6px",
+                          fontSize: "11.5px",
+                          fontWeight: "600",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease"
+                        }}
+                      >
+                        Choose Photo File
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const formData = new FormData();
+                            formData.append("file", file);
+                            try {
+                              showToast("Uploading photo...");
+                              const res = await fetch("http://localhost:5000/api/upload", {
+                                method: "POST",
+                                body: formData
+                              });
+                              const data = await res.json();
+                              if (data.success && data.url) {
+                                setCropImgSrc(data.url);
+                                showToast("Photo uploaded & preview updated!");
+                                fetchMedia();
+                              } else {
+                                showToast(data.message || "Failed to upload photo");
+                              }
+                            } catch (err) {
+                              showToast("Upload failed");
+                            }
+                          }}
+                          style={{ display: "none" }}
+                        />
+                      </label>
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value={cropPosX}
-                      onChange={(e) => setCropPosX(Number(e.target.value))}
-                      style={{ width: "100%", accentColor: "#0f172a", cursor: "ew-resize", display: "block", margin: "2px 0 0 0" }}
-                    />
-                    {/* Calibrated Ruler Ticks */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 2px", marginTop: "2px" }}>
-                      {[...Array(21)].map((_, i) => (
-                        <div
-                          key={i}
+
+                    {/* Direct URL input */}
+                    <div>
+                      <label style={{ display: "block", fontSize: "11.5px", fontWeight: "700", color: "#334155", marginBottom: "4px", textTransform: "uppercase" }}>
+                        Direct Photo URL
+                      </label>
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <input
+                          type="text"
+                          placeholder="e.g. /images/hero.webp or https://..."
+                          value={cropImgSrc}
+                          onChange={(e) => setCropImgSrc(e.target.value)}
                           style={{
-                            width: "1px",
-                            height: i === 10 ? "6px" : i % 5 === 0 ? "5px" : "3px",
-                            background: i === 10 ? "#0f172a" : i % 5 === 0 ? "#64748b" : "#cbd5e1"
+                            flex: 1,
+                            padding: "6px 10px",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            outline: "none"
                           }}
                         />
-                      ))}
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#64748b", marginTop: "1px", fontWeight: "500" }}>
-                      <span onClick={() => setCropPosX(0)} style={{ cursor: "pointer" }}>Left (0%)</span>
-                      <span onClick={() => setCropPosX(50)} style={{ cursor: "pointer" }}>Center (50%)</span>
-                      <span onClick={() => setCropPosX(100)} style={{ cursor: "pointer" }}>Right (100%)</span>
-                    </div>
-                  </div>
-
-                  {/* ROLLER 3: Vertical Focal Position (Y) */}
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span style={{ fontSize: "10.5px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.04em", color: "#334155" }}>
-                          Focal Roller Y
-                        </span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                         <button
                           type="button"
-                          onClick={() => setCropPosY((v) => Math.max(0, v - 5))}
-                          style={{ width: "19px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #cbd5e1", background: "#f8fafc", borderRadius: "3px", fontSize: "11px", fontWeight: "700", cursor: "pointer", color: "#334155" }}
-                        >
-                          -
-                        </button>
-                        <span style={{ fontSize: "10.5px", fontWeight: "700", fontFamily: "monospace", color: "#0f172a", background: "#f1f5f9", border: "1px solid #cbd5e1", padding: "1px 6px", borderRadius: "4px", minWidth: "48px", textAlign: "center" }}>
-                          Y: {cropPosY}%
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setCropPosY((v) => Math.min(100, v + 5))}
-                          style={{ width: "19px", height: "18px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #cbd5e1", background: "#f8fafc", borderRadius: "3px", fontSize: "11px", fontWeight: "700", cursor: "pointer", color: "#334155" }}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value={cropPosY}
-                      onChange={(e) => setCropPosY(Number(e.target.value))}
-                      style={{ width: "100%", accentColor: "#0f172a", cursor: "ew-resize", display: "block", margin: "2px 0 0 0" }}
-                    />
-                    {/* Calibrated Ruler Ticks */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 2px", marginTop: "2px" }}>
-                      {[...Array(21)].map((_, i) => (
-                        <div
-                          key={i}
+                          onClick={() => showToast("Preview updated with URL")}
                           style={{
-                            width: "1px",
-                            height: i === 10 ? "6px" : i % 5 === 0 ? "5px" : "3px",
-                            background: i === 10 ? "#0f172a" : i % 5 === 0 ? "#64748b" : "#cbd5e1"
+                            background: "#0f172a",
+                            color: "#ffffff",
+                            border: "none",
+                            padding: "6px 14px",
+                            borderRadius: "6px",
+                            fontSize: "11.5px",
+                            fontWeight: "600",
+                            cursor: "pointer"
                           }}
-                        />
-                      ))}
+                        >
+                          Preview URL
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#64748b", marginTop: "1px", fontWeight: "500" }}>
-                      <span onClick={() => setCropPosY(0)} style={{ cursor: "pointer" }}>Top (0%)</span>
-                      <span onClick={() => setCropPosY(50)} style={{ cursor: "pointer" }}>Middle (50%)</span>
-                      <span onClick={() => setCropPosY(100)} style={{ cursor: "pointer" }}>Bottom (100%)</span>
+
+                    {/* Media Library Images */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                        <label style={{ fontSize: "11.5px", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                          Live Website Images Library
+                        </label>
+                        <span style={{ fontSize: "10.5px", color: "#64748b", fontWeight: "600" }}>
+                          Click any photo to preview & replace
+                        </span>
+                      </div>
+                      <div
+                        className="library-thin-scroll"
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+                          gap: "10px",
+                          maxHeight: "280px",
+                          overflowY: "auto",
+                          padding: "4px"
+                        }}
+                      >
+                        {(() => {
+                          const imageList = [];
+                          mediaFiles.forEach((f) => {
+                            const isImg = f.url?.match(/\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i) || f.type?.includes("image") || f.name?.match(/\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i);
+                            if (isImg && !imageList.some((img) => img.url === f.url)) {
+                              imageList.push(f);
+                            }
+                          });
+                          if (imageList.length === 0) {
+                            return <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "20px", color: "#94a3b8", fontSize: "12px" }}>No images found in library</div>;
+                          }
+                          return imageList.map((f, i) => {
+                            const isSelected = (cropImgSrc || cropTargetImgSrc) === f.url;
+                            return (
+                              <div
+                                key={i}
+                                onClick={() => setCropImgSrc(f.url)}
+                                style={{
+                                  border: isSelected ? "2px solid #0f172a" : "1px solid #e2e8f0",
+                                  borderRadius: "8px",
+                                  padding: "6px",
+                                  background: isSelected ? "#f1f5f9" : "#ffffff",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  transition: "all 0.15s ease",
+                                  boxShadow: isSelected ? "0 4px 12px rgba(15,23,42,0.15)" : "none"
+                                }}
+                              >
+                                <div style={{ width: "100%", height: "85px", background: "#f8fafc", borderRadius: "6px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  <img
+                                    src={f.url}
+                                    alt={f.name || "Library Image"}
+                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                  />
+                                </div>
+                                <span style={{ fontSize: "11px", fontWeight: isSelected ? "700" : "500", color: isSelected ? "#0f172a" : "#334155", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", textAlign: "center" }}>
+                                  {f.name || f.filename || "Photo"}
+                                </span>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
-              {/* Modal Footer (Compact) */}
-              <div style={{ padding: "10px 18px", background: "#f8fafc", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "flex-end", gap: "8px", flexShrink: 0 }}>
+              {/* Modal Footer */}
+              <div
+                style={{
+                  padding: "12px 20px",
+                  borderTop: "1px solid #f1f5f9",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "#ffffff"
+                }}
+              >
                 <button
                   type="button"
-                  onClick={() => setCropModalOpen(false)}
-                  style={{ background: "#ffffff", border: "1px solid #cbd5e1", color: "#475569", padding: "6px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: "600", cursor: "pointer", transition: "all 0.15s ease" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; }}
+                  onClick={() => {
+                    setCropScale(100);
+                    setCropPosX(50);
+                    setCropPosY(50);
+                    setCropFit("cover");
+                    setCropImgSrc("");
+                    showToast("Framing reset to default");
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid #cbd5e1",
+                    color: "#64748b",
+                    padding: "7px 14px",
+                    borderRadius: "7px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
                 >
-                  Cancel
+                  Reset Framing
                 </button>
-                <button
-                  type="button"
-                  onClick={handleApplyCrop}
-                  style={{ background: "#0f172a", border: "none", color: "#ffffff", padding: "6px 16px", borderRadius: "6px", fontSize: "12px", fontWeight: "600", cursor: "pointer", boxShadow: "0 2px 6px rgba(15,23,42,0.2)", transition: "all 0.15s ease" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "#1e293b"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "#0f172a"; }}
-                >
-                  Apply Framing
-                </button>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setCropModalOpen(false)}
+                    style={{
+                      background: "#ffffff",
+                      border: "1px solid #cbd5e1",
+                      color: "#475569",
+                      padding: "7px 14px",
+                      borderRadius: "7px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyCrop}
+                    style={{
+                      background: "#0f172a",
+                      border: "none",
+                      color: "#ffffff",
+                      padding: "7px 18px",
+                      borderRadius: "7px",
+                      fontSize: "12px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 8px rgba(15,23,42,0.2)"
+                    }}
+                  >
+                    Save & Apply Photo
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         );
       })()}
+
+            {/* MODAL: VIDEO SETTINGS, CROP & REPLACE */}
+      {videoModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: "48px",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.65)",
+            backdropFilter: "blur(6px)",
+            zIndex: 2000010,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "14px"
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setVideoModalOpen(false);
+          }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "14px",
+              width: "100%",
+              maxWidth: "680px",
+              maxHeight: "min(84vh, 660px)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 25px 60px -15px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.05)"
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "14px 20px",
+                borderBottom: "1px solid #f1f5f9",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "#ffffff"
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "8px",
+                    background: "#0f172a",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#ffffff"
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                  </svg>
+                </div>
+                <div>
+                  <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", margin: 0 }}>
+                    Video Settings & Framing
+                  </h3>
+                  <p style={{ fontSize: "11.5px", color: "#64748b", margin: 0, marginTop: "1px" }}>
+                    Live Preview, Object-Fit Crop & Source Replacement
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVideoModalOpen(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#94a3b8",
+                  fontSize: "22px",
+                  cursor: "pointer",
+                  lineHeight: 1,
+                  padding: "4px 8px",
+                  borderRadius: "6px"
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "#0f172a"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "#94a3b8"; }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Subheader when in sub-screens (reframe or replace) */}
+            {videoModalTab !== "main" && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "9px 18px",
+                  background: "#f8fafc",
+                  borderBottom: "1px solid #e2e8f0"
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setVideoModalTab("main")}
+                  style={{
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    color: "#0f172a",
+                    fontSize: "11.5px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    transition: "all 0.15s ease"
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                  </svg>
+                  <span>Back to Video Preview</span>
+                </button>
+                <span style={{ fontSize: "12px", fontWeight: "700", color: "#334155" }}>
+                  {videoModalTab === "reframe" ? "Edit Frame & Focus" : "Replace Video Source"}
+                </span>
+              </div>
+            )}
+
+            {/* Modal Body */}
+            <div
+              className="library-thin-scroll"
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "16px 20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "14px"
+              }}
+            >
+              {/* SCREEN 1: MAIN CLEAN PREVIEW WITH "EDIT FRAME" & "REPLACE" BUTTONS */}
+              {videoModalTab === "main" && (
+                <>
+                  {/* PREVIEW VIEWPORT CONTROLS */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 2px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "11px", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                        Preview Mode:
+                      </span>
+                      <div style={{ display: "inline-flex", background: "#f1f5f9", padding: "2px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                        <button
+                          type="button"
+                          onClick={() => setVideoPreviewMode("16/9")}
+                          style={{
+                            padding: "4px 11px",
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            borderRadius: "4px",
+                            border: "none",
+                            cursor: "pointer",
+                            background: videoPreviewMode === "16/9" ? "#0f172a" : "transparent",
+                            color: videoPreviewMode === "16/9" ? "#ffffff" : "#64748b",
+                            transition: "all 0.15s ease"
+                          }}
+                        >
+                          16:9 Full Widescreen
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVideoPreviewMode("hero")}
+                          style={{
+                            padding: "4px 11px",
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            borderRadius: "4px",
+                            border: "none",
+                            cursor: "pointer",
+                            background: videoPreviewMode === "hero" ? "#0f172a" : "transparent",
+                            color: videoPreviewMode === "hero" ? "#ffffff" : "#64748b",
+                            transition: "all 0.15s ease"
+                          }}
+                        >
+                          Hero Panoramic (21:9)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVideoPreviewMode("contain")}
+                          style={{
+                            padding: "4px 11px",
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            borderRadius: "4px",
+                            border: "none",
+                            cursor: "pointer",
+                            background: videoPreviewMode === "contain" ? "#0f172a" : "transparent",
+                            color: videoPreviewMode === "contain" ? "#ffffff" : "#64748b",
+                            transition: "all 0.15s ease"
+                          }}
+                        >
+                          Fit Original
+                        </button>
+                      </div>
+                    </div>
+                    {videoMeta.width ? (
+                      <span style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>
+                        Native: {videoMeta.width}&times;{videoMeta.height}px
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {/* PROPER CLEAN VIDEO PREVIEW CONTAINER */}
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      maxWidth: "100%",
+                      aspectRatio: videoPreviewMode === "hero" ? "21 / 9" : "16 / 9",
+                      maxHeight: "260px",
+                      margin: "0 auto",
+                      background: "#050507",
+                      borderRadius: "10px",
+                      overflow: "hidden",
+                      border: "1px solid #1e293b",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: "0 8px 24px rgba(0, 0, 0, 0.25)",
+                      transition: "all 0.2s ease"
+                    }}
+                  >
+                    {videoState.src ? (
+                      (/\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i.test(videoState.src) || videoState.src?.startsWith("data:image/")) ? (
+                        <img
+                          src={videoState.src}
+                          alt="Media Preview"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: videoPreviewMode === "contain" ? "contain" : videoState.fit,
+                            objectPosition: `${videoState.posX}% ${videoState.posY}%`,
+                            transform: `scale(${videoState.scale / 100})`,
+                            transition: "transform 0.15s ease, object-position 0.15s ease"
+                          }}
+                        />
+                      ) : (
+                        <video
+                          ref={previewVideoRef}
+                          key={videoState.src}
+                          src={videoState.src}
+                          autoPlay
+                          loop={videoState.loop}
+                          muted={videoState.muted}
+                          playsInline
+                          controls
+                          onLoadedMetadata={(e) => {
+                            const v = e.currentTarget;
+                            setVideoMeta({
+                              width: v.videoWidth,
+                              height: v.videoHeight,
+                              duration: v.duration
+                            });
+                            if (videoState.speed) {
+                              v.playbackRate = videoState.speed;
+                            }
+                          }}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: videoPreviewMode === "contain" ? "contain" : videoState.fit,
+                            objectPosition: `${videoState.posX}% ${videoState.posY}%`,
+                            transform: `scale(${videoState.scale / 100})`,
+                            transition: "transform 0.15s ease, object-position 0.15s ease"
+                          }}
+                        />
+                      )
+                    ) : (
+                      <div style={{ color: "#94a3b8", fontSize: "12px" }}>No media source specified</div>
+                    )}
+
+                    {/* Live Preview Badge */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "10px",
+                        left: "10px",
+                        background: "rgba(15, 23, 42, 0.8)",
+                        backdropFilter: "blur(6px)",
+                        color: "#f8fafc",
+                        padding: "3px 9px",
+                        borderRadius: "5px",
+                        fontSize: "10.5px",
+                        fontWeight: "600",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        pointerEvents: "none",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.3)"
+                      }}
+                    >
+                      <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e", display: "inline-block", boxShadow: "0 0 6px #22c55e" }}></span>
+                      <span>LIVE PREVIEW</span>
+                      <span style={{ opacity: 0.6 }}>|</span>
+                      <span style={{ opacity: 0.9 }}>{videoState.scale}% &bull; {videoPreviewMode === "contain" ? "contain" : videoState.fit}</span>
+                      {videoMeta.width && (
+                        <>
+                          <span style={{ opacity: 0.6 }}>|</span>
+                          <span style={{ opacity: 0.85, fontSize: "10px" }}>{videoMeta.width}&times;{videoMeta.height}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* TWO BIG CLEAN ACTION BUTTONS: "EDIT FRAME" & "REPLACE" */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "4px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setVideoModalTab("reframe")}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "8px",
+                        padding: "13px 20px",
+                        background: "#ffffff",
+                        border: "1.5px solid #0f172a",
+                        borderRadius: "9px",
+                        color: "#0f172a",
+                        fontSize: "13px",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        boxShadow: "0 2px 8px rgba(15, 23, 42, 0.06)",
+                        transition: "all 0.15s ease"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "#0f172a";
+                        e.currentTarget.style.color = "#ffffff";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "#ffffff";
+                        e.currentTarget.style.color = "#0f172a";
+                      }}
+                    >
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 2v14a2 2 0 0 0 2 2h14"></path>
+                        <path d="M18 22V8a2 2 0 0 0-2-2H2"></path>
+                      </svg>
+                      <span>Edit Frame</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setVideoModalTab("replace")}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "8px",
+                        padding: "13px 20px",
+                        background: "#0f172a",
+                        border: "1.5px solid #0f172a",
+                        borderRadius: "9px",
+                        color: "#ffffff",
+                        fontSize: "13px",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        boxShadow: "0 4px 12px rgba(15, 23, 42, 0.2)",
+                        transition: "all 0.15s ease"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "#1e293b";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "#0f172a";
+                      }}
+                    >
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                      <span>Replace</span>
+                    </button>
+                  </div>
+
+                  {/* ACTIVE VIDEO SPEC INFO CARD */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "8px",
+                      padding: "10px 14px",
+                      marginTop: "2px"
+                    }}
+                  >
+                    <div style={{ minWidth: 0, paddingRight: "10px" }}>
+                      <span style={{ fontSize: "10.5px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", display: "block" }}>
+                        Active Video Source
+                      </span>
+                      <span style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                        {videoState.src || "No source"}
+                      </span>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <span style={{ fontSize: "10.5px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.4px", display: "block" }}>
+                        Framing Status
+                      </span>
+                      <span style={{ fontSize: "12px", fontWeight: "700", color: "#2563eb" }}>
+                        {videoState.scale}% &bull; {videoState.fit} &bull; {videoState.speed}x
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* SCREEN 2: EDIT REFRAME CONTROLS */}
+              {videoModalTab === "reframe" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* Compact Live Video Preview while reframing */}
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      aspectRatio: "21 / 9",
+                      maxHeight: "150px",
+                      background: "#050507",
+                      borderRadius: "8px",
+                      overflow: "hidden",
+                      border: "1px solid #1e293b",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                  >
+                    {videoState.src && (
+                      (/\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i.test(videoState.src) || videoState.src?.startsWith("data:image/")) ? (
+                        <img
+                          src={videoState.src}
+                          alt="Media Framing Preview"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: videoState.fit,
+                            objectPosition: `${videoState.posX}% ${videoState.posY}%`,
+                            transform: `scale(${videoState.scale / 100})`
+                          }}
+                        />
+                      ) : (
+                        <video
+                          src={videoState.src}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: videoState.fit,
+                            objectPosition: `${videoState.posX}% ${videoState.posY}%`,
+                            transform: `scale(${videoState.scale / 100})`
+                          }}
+                        />
+                      )
+                    )}
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: "6px",
+                        left: "8px",
+                        background: "rgba(15, 23, 42, 0.8)",
+                        color: "#f8fafc",
+                        padding: "2px 7px",
+                        borderRadius: "4px",
+                        fontSize: "9.5px",
+                        fontWeight: "600"
+                      }}
+                    >
+                      {videoState.scale}% &bull; {videoState.fit} &bull; Focus: ({videoState.posX}%, {videoState.posY}%)
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                    {/* LEFT: Object-Fit & Zoom */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "11.5px", fontWeight: "700", color: "#334155", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                          Framing Fit (Object-Fit)
+                        </label>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
+                          {[
+                            { key: "cover", label: "Cover (Fill & Crop)" },
+                            { key: "contain", label: "Contain (Boxed)" },
+                            { key: "fill", label: "Fill (Stretch)" }
+                          ].map((fitOption) => (
+                            <button
+                              key={fitOption.key}
+                              type="button"
+                              onClick={() => setVideoState((prev) => ({ ...prev, fit: fitOption.key }))}
+                              style={{
+                                padding: "7px 6px",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                                borderRadius: "6px",
+                                border: videoState.fit === fitOption.key ? "1.5px solid #0f172a" : "1px solid #cbd5e1",
+                                background: videoState.fit === fitOption.key ? "#0f172a" : "#ffffff",
+                                color: videoState.fit === fitOption.key ? "#ffffff" : "#475569",
+                                cursor: "pointer",
+                                textAlign: "center",
+                                transition: "all 0.15s ease"
+                              }}
+                            >
+                              {fitOption.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                          <label style={{ fontSize: "11.5px", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                            Scale & Zoom
+                          </label>
+                          <span style={{ fontSize: "11.5px", fontWeight: "700", color: "#0f172a" }}>
+                            {videoState.scale}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="100"
+                          max="160"
+                          step="1"
+                          value={videoState.scale}
+                          onChange={(e) => setVideoState((prev) => ({ ...prev, scale: parseInt(e.target.value, 10) }))}
+                          style={{ width: "100%", accentColor: "#0f172a", cursor: "pointer" }}
+                        />
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#94a3b8" }}>
+                          <span>100% (Default)</span>
+                          <span>130%</span>
+                          <span>160% (Close-up)</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "11.5px", fontWeight: "700", color: "#334155", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                          Playback Speed
+                        </label>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          {[0.5, 0.75, 1, 1.25, 1.5].map((spd) => (
+                            <button
+                              key={spd}
+                              type="button"
+                              onClick={() => setVideoState((prev) => ({ ...prev, speed: spd }))}
+                              style={{
+                                flex: 1,
+                                padding: "4px 0",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                                borderRadius: "4px",
+                                border: videoState.speed === spd ? "1.5px solid #0f172a" : "1px solid #cbd5e1",
+                                background: videoState.speed === spd ? "#0f172a" : "#ffffff",
+                                color: videoState.speed === spd ? "#ffffff" : "#64748b",
+                                cursor: "pointer"
+                              }}
+                            >
+                              {spd === 1 ? "1x" : `${spd}x`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* RIGHT: Pan Focus X and Y */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                          <label style={{ fontSize: "11.5px", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                            Horizontal Pan (Focus X)
+                          </label>
+                          <span style={{ fontSize: "11.5px", fontWeight: "700", color: "#0f172a" }}>
+                            {videoState.posX}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={videoState.posX}
+                          onChange={(e) => setVideoState((prev) => ({ ...prev, posX: parseInt(e.target.value, 10) }))}
+                          style={{ width: "100%", accentColor: "#0f172a", cursor: "pointer" }}
+                        />
+                        <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+                          {[
+                            { label: "Left (0%)", val: 0 },
+                            { label: "Center (50%)", val: 50 },
+                            { label: "Right (100%)", val: 100 }
+                          ].map((btn) => (
+                            <button
+                              key={btn.val}
+                              type="button"
+                              onClick={() => setVideoState((prev) => ({ ...prev, posX: btn.val }))}
+                              style={{
+                                flex: 1,
+                                padding: "3px 0",
+                                fontSize: "10px",
+                                fontWeight: "500",
+                                background: "#f1f5f9",
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                color: "#475569"
+                              }}
+                            >
+                              {btn.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                          <label style={{ fontSize: "11.5px", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                            Vertical Pan (Focus Y)
+                          </label>
+                          <span style={{ fontSize: "11.5px", fontWeight: "700", color: "#0f172a" }}>
+                            {videoState.posY}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={videoState.posY}
+                          onChange={(e) => setVideoState((prev) => ({ ...prev, posY: parseInt(e.target.value, 10) }))}
+                          style={{ width: "100%", accentColor: "#0f172a", cursor: "pointer" }}
+                        />
+                        <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+                          {[
+                            { label: "Top (0%)", val: 0 },
+                            { label: "Center (50%)", val: 50 },
+                            { label: "Bottom (100%)", val: 100 }
+                          ].map((btn) => (
+                            <button
+                              key={btn.val}
+                              type="button"
+                              onClick={() => setVideoState((prev) => ({ ...prev, posY: btn.val }))}
+                              style={{
+                                flex: 1,
+                                padding: "3px 0",
+                                fontSize: "10px",
+                                fontWeight: "500",
+                                background: "#f1f5f9",
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                color: "#475569"
+                              }}
+                            >
+                              {btn.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "14px", marginTop: "4px" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#334155", cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={videoState.loop}
+                            onChange={(e) => setVideoState((prev) => ({ ...prev, loop: e.target.checked }))}
+                          />
+                          Loop Playback
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#334155", cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={videoState.muted}
+                            onChange={(e) => setVideoState((prev) => ({ ...prev, muted: e.target.checked }))}
+                          />
+                          Muted Audio
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "6px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setVideoModalTab("main")}
+                      style={{
+                        background: "#0f172a",
+                        color: "#ffffff",
+                        border: "none",
+                        padding: "7px 18px",
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        cursor: "pointer"
+                      }}
+                    >
+                      Apply &amp; Back to Preview
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SCREEN 3: REPLACE VIDEO / MEDIA SOURCE */}
+              {videoModalTab === "replace" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* Category Filter Pills: All Media / Videos / Images */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", padding: "8px 12px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                      Media Filter:
+                    </span>
+                    <div style={{ display: "inline-flex", background: "#ffffff", padding: "2px", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
+                      {[
+                        { id: "all", label: "All Media" },
+                        { id: "videos", label: "Videos Only" },
+                        { id: "images", label: "Images Only" }
+                      ].map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setVideoReplaceCategory(cat.id)}
+                          style={{
+                            padding: "4px 11px",
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            borderRadius: "4px",
+                            border: "none",
+                            cursor: "pointer",
+                            background: videoReplaceCategory === cat.id ? "#0f172a" : "transparent",
+                            color: videoReplaceCategory === cat.id ? "#ffffff" : "#64748b",
+                            transition: "all 0.15s ease"
+                          }}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Upload new media (video or image) */}
+                  <div
+                    style={{
+                      border: "2px dashed #cbd5e1",
+                      borderRadius: "8px",
+                      padding: "16px",
+                      textAlign: "center",
+                      background: "#f8fafc",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px"
+                    }}
+                  >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span style={{ fontSize: "12px", fontWeight: "600", color: "#1e293b" }}>Upload Media File (Video or Image)</span>
+                    <span style={{ fontSize: "10.5px", color: "#64748b" }}>Supports MP4, WebM, MOV, JPG, PNG, WEBP, SVG</span>
+                    <label
+                      style={{
+                        marginTop: "4px",
+                        background: "#0f172a",
+                        color: "#ffffff",
+                        padding: "6px 16px",
+                        borderRadius: "6px",
+                        fontSize: "11.5px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease"
+                      }}
+                    >
+                      Choose Media File
+                      <input
+                        type="file"
+                        accept="video/*,image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const formData = new FormData();
+                          formData.append("file", file);
+                          try {
+                            showToast("Uploading media file...");
+                            const res = await fetch("http://localhost:5000/api/upload", {
+                              method: "POST",
+                              body: formData
+                            });
+                            const data = await res.json();
+                            if (data.success && data.url) {
+                              setVideoState((prev) => ({ ...prev, src: data.url }));
+                              showToast("Media uploaded & preview updated!");
+                              fetchMedia();
+                            } else {
+                              showToast(data.message || "Failed to upload file");
+                            }
+                          } catch (err) {
+                            showToast("Upload failed");
+                          }
+                        }}
+                        style={{ display: "none" }}
+                      />
+                    </label>
+                  </div>
+
+                  {/* Direct URL input */}
+                  <div>
+                    <label style={{ display: "block", fontSize: "11.5px", fontWeight: "700", color: "#334155", marginBottom: "4px", textTransform: "uppercase" }}>
+                      Direct Media URL
+                    </label>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <input
+                        type="text"
+                        placeholder="e.g. /videos/hero.mp4 or /images/hero.webp or https://..."
+                        value={videoState.src}
+                        onChange={(e) => setVideoState((prev) => ({ ...prev, src: e.target.value }))}
+                        style={{
+                          flex: 1,
+                          padding: "6px 10px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          outline: "none"
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => showToast("Preview updated with URL")}
+                        style={{
+                          background: "#0f172a",
+                          color: "#ffffff",
+                          border: "none",
+                          padding: "6px 14px",
+                          borderRadius: "6px",
+                          fontSize: "11.5px",
+                          fontWeight: "600",
+                          cursor: "pointer"
+                        }}
+                      >
+                        Preview URL
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Media Library Items (Videos and Images) */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                      <label style={{ fontSize: "11.5px", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                        Live Website Media Library
+                      </label>
+                      <span style={{ fontSize: "10.5px", color: "#64748b", fontWeight: "600" }}>
+                        Click any item to preview & replace
+                      </span>
+                    </div>
+                    <div
+                      className="library-thin-scroll"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))",
+                        gap: "12px",
+                        maxHeight: "290px",
+                        overflowY: "auto",
+                        padding: "4px"
+                      }}
+                    >
+                      {(() => {
+                        const allItems = [];
+                        // 1. Add videos
+                        if (videoReplaceCategory === "all" || videoReplaceCategory === "videos") {
+                          LIVE_WEBSITE_VIDEOS.forEach((v) => {
+                            allItems.push({ ...v, isVideo: true });
+                          });
+                        }
+                        // 2. Add mediaFiles
+                        mediaFiles.forEach((f) => {
+                          const isVid = f.url?.match(/\.(mp4|webm|mov|ogg)($|\?)/i) || f.type?.includes("video") || f.name?.match(/\.(mp4|webm|mov)($|\?)/i);
+                          const isImg = f.url?.match(/\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i) || f.type?.includes("image") || f.name?.match(/\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i);
+                          if (isVid && (videoReplaceCategory === "all" || videoReplaceCategory === "videos")) {
+                            if (!allItems.some((item) => item.url === f.url)) {
+                              allItems.push({ ...f, isVideo: true });
+                            }
+                          } else if (isImg && (videoReplaceCategory === "all" || videoReplaceCategory === "images")) {
+                            if (!allItems.some((item) => item.url === f.url)) {
+                              allItems.push({ ...f, isVideo: false });
+                            }
+                          }
+                        });
+
+                        if (allItems.length === 0) {
+                          return <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "20px", color: "#94a3b8", fontSize: "12px" }}>No media files found</div>;
+                        }
+
+                        return allItems.map((f, i) => {
+                          const isSelected = videoState.src === f.url;
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => setVideoState((prev) => ({ ...prev, src: f.url }))}
+                              onMouseEnter={(e) => {
+                                if (f.isVideo) {
+                                  const vid = e.currentTarget.querySelector("video");
+                                  if (vid) {
+                                    vid.muted = true;
+                                    vid.currentTime = 0;
+                                    vid.play().catch(() => {});
+                                  }
+                                  const badge = e.currentTarget.querySelector(".hover-play-badge");
+                                  if (badge) badge.style.opacity = "1";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (f.isVideo) {
+                                  const vid = e.currentTarget.querySelector("video");
+                                  if (vid) {
+                                    vid.pause();
+                                    vid.currentTime = 0;
+                                  }
+                                  const badge = e.currentTarget.querySelector(".hover-play-badge");
+                                  if (badge) badge.style.opacity = "0";
+                                }
+                              }}
+                              style={{
+                                border: isSelected ? "2px solid #0f172a" : "1px solid #e2e8f0",
+                                borderRadius: "10px",
+                                padding: "8px",
+                                background: isSelected ? "#f1f5f9" : "#ffffff",
+                                cursor: "pointer",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: "8px",
+                                transition: "all 0.18s ease",
+                                boxShadow: isSelected ? "0 4px 14px rgba(15,23,42,0.18)" : "0 1px 4px rgba(0,0,0,0.05)"
+                              }}
+                            >
+                              <div style={{ width: "100%", height: "105px", background: "#050507", borderRadius: "8px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+                                {f.isVideo ? (
+                                  <>
+                                    <video
+                                      src={f.url}
+                                      muted
+                                      loop
+                                      playsInline
+                                      preload="metadata"
+                                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                    />
+                                    <div style={{ position: "absolute", bottom: "5px", right: "5px", background: "rgba(15,23,42,0.85)", color: "#ffffff", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: "700", letterSpacing: "0.4px" }}>
+                                      MP4
+                                    </div>
+                                    <div
+                                      className="hover-play-badge"
+                                      style={{
+                                        position: "absolute",
+                                        top: "5px",
+                                        left: "5px",
+                                        background: "rgba(15,23,42,0.85)",
+                                        backdropFilter: "blur(4px)",
+                                        color: "#22c55e",
+                                        padding: "2px 6px",
+                                        borderRadius: "4px",
+                                        fontSize: "9px",
+                                        fontWeight: "700",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                        opacity: 0,
+                                        transition: "opacity 0.15s ease",
+                                        pointerEvents: "none"
+                                      }}
+                                    >
+                                      <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#22c55e" }}></span>
+                                      <span>PLAYING</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <img
+                                      src={f.url}
+                                      alt={f.name || "Image"}
+                                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                    />
+                                    <div style={{ position: "absolute", bottom: "5px", right: "5px", background: "rgba(15,23,42,0.85)", color: "#ffffff", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: "700", letterSpacing: "0.4px" }}>
+                                      IMG
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              <span style={{ fontSize: "11.5px", fontWeight: isSelected ? "700" : "600", color: isSelected ? "#0f172a" : "#334155", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", textAlign: "center" }}>
+                                {f.name || f.filename || (f.isVideo ? "Video" : "Image")}
+                              </span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                padding: "12px 20px",
+                borderTop: "1px solid #e2e8f0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                background: "#f8fafc"
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setVideoState((prev) => ({
+                    ...prev,
+                    fit: "cover",
+                    scale: 100,
+                    posX: 50,
+                    posY: 50,
+                    speed: 1,
+                    loop: true,
+                    muted: true
+                  }));
+                  showToast("Framing reset to default");
+                }}
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  color: "#64748b",
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  fontSize: "11.5px",
+                  fontWeight: "600",
+                  cursor: "pointer"
+                }}
+              >
+                Reset Framing
+              </button>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setVideoModalOpen(false)}
+                  style={{
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    color: "#475569",
+                    padding: "6px 14px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyVideoChanges}
+                  style={{
+                    background: "#0f172a",
+                    border: "none",
+                    color: "#ffffff",
+                    padding: "6px 16px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(15, 23, 42, 0.3)",
+                    transition: "all 0.15s ease"
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#1e293b"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "#0f172a"; }}
+                >
+                  Save & Apply Video
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 5. MODAL: RAW CODE / SVG INSPECTOR */}
       {codeModalOpen && (

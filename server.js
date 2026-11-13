@@ -38,6 +38,12 @@ if (fs.existsSync(websitePublicDir)) {
   app.use('/media', express.static(websitePublicDir));
 }
 
+// Serve MapLibre GL vendor assets locally for CMS interactive map parity
+const maplibreDist = path.join(__dirname, 'website', 'node_modules', 'maplibre-gl', 'dist');
+if (fs.existsSync(maplibreDist)) {
+  app.use('/vendor/maplibre-gl', express.static(maplibreDist));
+}
+
 // Next.js image optimizer compatibility route for CMS preview and dashboard
 app.get('/_next/image', (req, res) => {
   const imageUrl = req.query.url;
@@ -201,13 +207,13 @@ const initialSeedData = {
     },
     header: {
       key: "header",
-      phone: "+91 124 4421155",
-      whatsapp: "+91 124 4421155",
+      phone: "+91 123 456 7890",
+      whatsapp: "+91 123 456 7890",
       phone_icon: "/images/call.svg",
       whatsapp_icon: "/images/whatsapp.svg",
-      cta_text: "SCHEDULE A VISIT",
+      cta_text: "Get in Touch",
       cta_link: "/contact",
-      nav_links: "ABOUT US, LATEST LAUNCHES, PROJECTS, SUSTAINABILITY",
+      nav_links: "Latest Launches, Projects, Sustainability, About Emaar",
       projects_dropdown: "Residential, Commercial",
       logo: "/images/emaar-india-logo-en.svg"
     },
@@ -317,6 +323,22 @@ const initialSeedData = {
       hero_subtitle: "Nestled at the foothills of the Aravallis, Gurugram.",
       content: "Exclusive residential apartments surrounded by green vistas and world-class amenities.",
       status: "published",
+      location: {
+        eyebrow: "Location",
+        mapTitle: "Map of Emaar Serenity Hills",
+        openUrl: "https://www.google.com/maps/search/?api=1&query=Emaar+Serenity+Hills+Gurugram",
+        openLabel: "Open in Google Maps",
+        origin: { name: "Serenity Hills", coords: [77.0660397, 28.4269689] },
+        destinations: [
+          { name: "Cloverleaf (Dwarka Expy / NH-48)", coords: [76.9900132, 28.4069395] },
+          { name: "Delhi Public School", coords: [76.9597526, 28.4063222] },
+          { name: "Apollo Cradle", coords: [76.9530944, 28.3926184] },
+          { name: "Hyatt Regency", coords: [76.9769075, 28.3919521] },
+          { name: "Iris Broadway", coords: [76.9454175, 28.4035483] },
+          { name: "St. Xavier's High School", coords: [77.0579754, 28.407035] }
+        ],
+        note: "Select a destination to see the drive from Serenity Hills; distances and drive times are estimates based on OpenStreetMap data. Emaar lists these as nearby."
+      },
       updated_at: new Date().toISOString()
     }
   ]
@@ -403,9 +425,121 @@ if (!Array.isArray(db.versions) || db.versions.length === 0) {
   saveData(db);
 }
 
+// Ensure db.leads array exists with realistic seed leads
+if (!Array.isArray(db.leads) || db.leads.length === 0) {
+  db.leads = [
+    {
+      id: "lead-1",
+      name: "Vikram Malhotra",
+      email: "vikram.m@outlook.com",
+      phone: "+91 98112 45890",
+      source: "Serenity Hills Enquiry",
+      status: "New",
+      message: "Interested in 4 BHK luxury penthouse at Serenity Hills. Please share floor plans and price sheet.",
+      created_at: "2026-11-12T09:30:00.000Z"
+    },
+    {
+      id: "lead-2",
+      name: "Pooja Sharma",
+      email: "pooja.sharma@gmail.com",
+      phone: "+91 99880 12345",
+      source: "Business Centre Commercial",
+      status: "Contacted",
+      message: "Looking for 5,000 sq ft Grade A office space for our tech consultancy.",
+      created_at: "2026-11-11T14:15:00.000Z"
+    },
+    {
+      id: "lead-3",
+      name: "Rahul Khanna",
+      email: "rkhanna@investcorp.in",
+      phone: "+91 98765 43210",
+      source: "Get In Touch Modal",
+      status: "Qualified",
+      message: "Requesting site visit for Urban Oasis Gurugram this upcoming Saturday morning.",
+      created_at: "2026-11-10T11:45:00.000Z"
+    }
+  ];
+  saveData(db);
+}
+
 // =====================================================================
 // API ROUTES
 // =====================================================================
+
+// ==========================================
+// Customer Leads & Form Submissions API
+// ==========================================
+app.get('/api/leads', (req, res) => {
+  const leads = Array.isArray(db.leads) ? db.leads : [];
+  res.json({ success: true, count: leads.length, data: leads });
+});
+
+app.post('/api/leads', (req, res) => {
+  const { name, email, phone, source, message } = req.body || {};
+  if (!name || (!email && !phone)) {
+    return res.status(400).json({ success: false, message: 'Name and contact info required' });
+  }
+
+  const newLead = {
+    id: 'lead-' + Date.now(),
+    name: String(name).trim(),
+    email: String(email || '').trim(),
+    phone: String(phone || '').trim(),
+    source: String(source || 'Website Modal').trim(),
+    message: String(message || 'Enquiry form submitted').trim(),
+    status: 'New',
+    created_at: new Date().toISOString()
+  };
+
+  db.leads = Array.isArray(db.leads) ? db.leads : [];
+  db.leads.unshift(newLead);
+  saveData(db);
+
+  res.status(201).json({ success: true, message: 'Lead recorded successfully', data: newLead });
+});
+
+app.patch('/api/leads/:id', (req, res) => {
+  const { id } = req.params;
+  const { status, notes } = req.body || {};
+  db.leads = Array.isArray(db.leads) ? db.leads : [];
+  const lead = db.leads.find(l => String(l.id) === String(id));
+  if (!lead) {
+    return res.status(404).json({ success: false, message: 'Lead not found' });
+  }
+
+  if (status) lead.status = status;
+  if (notes !== undefined) lead.notes = notes;
+  lead.updated_at = new Date().toISOString();
+  saveData(db);
+
+  res.json({ success: true, message: 'Lead updated', data: lead });
+});
+
+app.delete('/api/leads/:id', (req, res) => {
+  const { id } = req.params;
+  db.leads = Array.isArray(db.leads) ? db.leads : [];
+  const prevCount = db.leads.length;
+  db.leads = db.leads.filter(l => String(l.id) !== String(id));
+  if (db.leads.length === prevCount) {
+    return res.status(404).json({ success: false, message: 'Lead not found' });
+  }
+  saveData(db);
+  res.json({ success: true, message: 'Lead deleted successfully' });
+});
+
+const defaultSectionsOrder = [
+  { id: "hero", name: "Hero Section & Search", visible: true },
+  { id: "launches", name: "Latest Launches Stack", visible: true },
+  { id: "developments", name: "Featured Developments Rail", visible: true },
+  { id: "underDevelopment", name: "Under Development Rail", visible: true },
+  { id: "communitiesIntro", name: "Communities Intro Stack", visible: true },
+  { id: "communities", name: "Communities Collage", visible: true },
+  { id: "propertiesIntro", name: "Properties Intro Stack", visible: true },
+  { id: "showcase", name: "Showcase Mosaic", visible: true },
+  { id: "legacy", name: "Legacy & Heritage Stats", visible: true },
+  { id: "press", name: "Press Releases & News Rail", visible: true },
+  { id: "converse", name: "Converse CTA & Contact", visible: true }
+];
 
 // Unified Site Content Endpoint (Consumed by Next.js Live & Preview)
 app.get('/api/site-content', (req, res) => {
@@ -414,12 +548,17 @@ app.get('/api/site-content', (req, res) => {
     settings: db.settings,
     sections: db.sections,
     landmarks: db.landmarks,
-    pages: db.pages
-  } : (db.published || {
+    pages: db.pages,
+    sections_order: db.sections_order || defaultSectionsOrder
+  } : (db.published ? {
+    ...db.published,
+    sections_order: db.published.sections_order || db.sections_order || defaultSectionsOrder
+  } : {
     settings: db.settings,
     sections: db.sections,
     landmarks: db.landmarks,
-    pages: db.pages
+    pages: db.pages,
+    sections_order: db.sections_order || defaultSectionsOrder
   });
 
   res.json({
@@ -431,9 +570,34 @@ app.get('/api/site-content', (req, res) => {
   });
 });
 
+// Component Reordering & Visibility API
+app.get('/api/sections-order', (req, res) => {
+  const isStaged = req.query.mode === 'staged' || req.query.preview === 'true';
+  const source = isStaged ? db : (db.published || db);
+  res.json({
+    success: true,
+    data: source.sections_order || defaultSectionsOrder
+  });
+});
+
+app.put('/api/sections-order', (req, res) => {
+  if (Array.isArray(req.body.sections_order)) {
+    db.sections_order = req.body.sections_order;
+    db.staged_pending = true;
+    db.staged_updated_at = Date.now();
+    saveData(db);
+    return res.json({
+      success: true,
+      message: 'Component order and visibility successfully updated',
+      data: db.sections_order
+    });
+  }
+  res.status(400).json({ success: false, message: 'Invalid sections_order format' });
+});
+
 // Update Staged Site Content Endpoint (Directly updates settings, sections, landmarks, pages)
 app.put('/api/site-content', (req, res) => {
-  const { settings, sections, landmarks, pages } = req.body || {};
+  const { settings, sections, landmarks, pages, sections_order } = req.body || {};
   if (settings && typeof settings === 'object') {
     db.settings = { ...(db.settings || {}), ...settings };
   }
@@ -453,6 +617,9 @@ app.put('/api/site-content', (req, res) => {
   if (Array.isArray(pages)) {
     db.pages = pages;
   }
+  if (Array.isArray(sections_order)) {
+    db.sections_order = sections_order;
+  }
   db.staged_pending = true;
   db.staged_updated_at = Date.now();
   saveData(db);
@@ -463,7 +630,8 @@ app.put('/api/site-content', (req, res) => {
       settings: db.settings,
       sections: db.sections,
       landmarks: db.landmarks,
-      pages: db.pages
+      pages: db.pages,
+      sections_order: db.sections_order || defaultSectionsOrder
     }
   });
 });
@@ -594,6 +762,96 @@ app.put('/api/site-settings', (req, res) => {
   db.staged_updated_at = Date.now();
   saveData(db);
   res.json({ success: true, message: 'Settings saved', data: db.settings });
+});
+
+// ==========================================
+// Authentication Routes (Administrator Portal)
+// ==========================================
+const ADMIN_USER = {
+  id: 1,
+  username: "admin",
+  email: "admin@emaar.com",
+  name: "Tushar Yadav",
+  role: "Lead Administrator",
+  avatar: "TY"
+};
+
+const STAGE_USER = {
+  id: 2,
+  username: "stage",
+  email: "stage@emaar.com",
+  name: "Stage Reviewer",
+  role: "Stage Reviewer",
+  avatar: "SR"
+};
+
+app.post('/api/auth/login', (req, res) => {
+  const { username, email, password } = req.body || {};
+  const userIdentifier = (username || email || "").trim().toLowerCase();
+  const pass = (password || "").trim();
+
+  // Accept admin or admin@emaar.com with standard admin passwords
+  const isValidAdmin = userIdentifier === "admin" || userIdentifier === "admin@emaar.com";
+  const isValidAdminPass = pass === "admin" || pass === "admin123" || pass === "admin@123" || pass === "emaar2026";
+
+  if (isValidAdmin && isValidAdminPass) {
+    const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24-hour expiration
+    const token = 'emaar_token_' + Buffer.from(`${ADMIN_USER.email}:${expiresAt}`).toString('base64');
+    return res.json({
+      success: true,
+      message: "Authentication successful",
+      token,
+      expiresAt,
+      expiresIn: 86400,
+      user: ADMIN_USER
+    });
+  }
+
+  // Accept stage or stage@emaar.com
+  const isValidStage = userIdentifier === "stage" || userIdentifier === "stage@emaar.com" || userIdentifier === "staged";
+  const isValidStagePass = pass === "stage" || pass === "stage123" || pass === "stage@123" || pass === "admin" || pass === "admin123" || pass === "admin@123" || pass === "emaar2026" || pass === "";
+
+  if (isValidStage && isValidStagePass) {
+    const expiresAt = Date.now() + (24 * 60 * 60 * 1000);
+    const token = 'emaar_token_' + Buffer.from(`${STAGE_USER.email}:${expiresAt}`).toString('base64');
+    return res.json({
+      success: true,
+      message: "Stage reviewer authentication successful",
+      token,
+      expiresAt,
+      expiresIn: 86400,
+      user: STAGE_USER
+    });
+  }
+
+  return res.status(401).json({
+    success: false,
+    message: "Invalid credentials. Use admin@emaar.com / admin123 or stage@emaar.com / stage123"
+  });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Bearer emaar_token_')) {
+    const raw = authHeader.replace('Bearer emaar_token_', '');
+    try {
+      const decoded = Buffer.from(raw, 'base64').toString('utf8');
+      const [email, expiresAt] = decoded.split(':');
+      if (expiresAt && (Date.now() < Number(expiresAt))) {
+        if (email === ADMIN_USER.email) {
+          return res.json({ success: true, user: ADMIN_USER });
+        }
+        if (email === STAGE_USER.email) {
+          return res.json({ success: true, user: STAGE_USER });
+        }
+      }
+    } catch {}
+  }
+  return res.status(401).json({ success: false, message: "Unauthorized or session expired" });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.json({ success: true, message: "Logged out successfully" });
 });
 
 // Page Sections
@@ -821,31 +1079,40 @@ app.get('/api/media', (req, res) => {
     scanDir(siteImagesDir);
   }
 
-  // Hero Video & Logo
-  const videoPath = path.join(websitePublicDir, 'videos', 'emaar.mp4');
-  let videoBytes = 4863054;
-  let videoDate = new Date();
-  if (fs.existsSync(videoPath)) {
+  // Live website videos
+  const siteVideosDir = path.join(websitePublicDir, 'videos');
+  if (fs.existsSync(siteVideosDir)) {
     try {
-      const vStat = fs.statSync(videoPath);
-      videoBytes = vStat.size;
-      videoDate = vStat.mtime;
+      const vFiles = fs.readdirSync(siteVideosDir);
+      vFiles.forEach(f => {
+        if (/\.(mp4|webm|mov|ogg)$/i.test(f)) {
+          if (!mediaList.some(m => m.name === f || m.url === `/videos/${f}` || m.url === `/uploads/${f}`)) {
+            let videoBytes = 0;
+            let videoDate = new Date();
+            try {
+              const vStat = fs.statSync(path.join(siteVideosDir, f));
+              videoBytes = vStat.size;
+              videoDate = vStat.mtime;
+            } catch (e) {}
+            const videoFormatted = videoBytes > 1048576 
+              ? (videoBytes / 1048576).toFixed(2) + ' MB' 
+              : (videoBytes / 1024).toFixed(1) + ' KB';
+
+            mediaList.unshift({
+              id: `site-video-${f}`,
+              name: f,
+              url: `/videos/${f}`,
+              type: 'video',
+              sizeBytes: videoBytes,
+              sizeFormatted: videoFormatted,
+              date: videoDate,
+              isUserUpload: false
+            });
+          }
+        }
+      });
     } catch (e) {}
   }
-  const videoFormatted = videoBytes > 1048576 
-    ? (videoBytes / 1048576).toFixed(2) + ' MB' 
-    : (videoBytes / 1024).toFixed(1) + ' KB';
-
-  mediaList.unshift({
-    id: 'site-video',
-    name: 'emaar.mp4 (Hero Background Video)',
-    url: '/videos/emaar.mp4',
-    type: 'video',
-    sizeBytes: videoBytes,
-    sizeFormatted: videoFormatted,
-    date: videoDate,
-    isUserUpload: false
-  });
 
   const logoPath = path.join(websitePublicDir, 'images', 'emaar-india-logo-en.svg');
   let logoBytes = 3950;
@@ -939,7 +1206,8 @@ app.post('/api/publish', (req, res) => {
     settings: JSON.parse(JSON.stringify(currentDb.settings)),
     sections: JSON.parse(JSON.stringify(currentDb.sections)),
     landmarks: JSON.parse(JSON.stringify(currentDb.landmarks)),
-    pages: JSON.parse(JSON.stringify(currentDb.pages))
+    pages: JSON.parse(JSON.stringify(currentDb.pages)),
+    sections_order: currentDb.sections_order ? JSON.parse(JSON.stringify(currentDb.sections_order)) : JSON.parse(JSON.stringify(defaultSectionsOrder))
   };
 
   const versionCount = currentDb.versions.length + 1;
@@ -1225,22 +1493,34 @@ app.post('/api/versions/:id/rollback', (req, res) => {
   });
 });
 
-// Staged Website Preview Route (Serves staged preview on port 5000 before publishing)
-app.get(/^\/preview/, (req, res) => {
+// Staged Website Preview Route - Serves preview.html directly for /admin/staged
+app.get(/^\/admin\/staged/, (req, res) => {
   const previewPath = path.join(publicDir, 'preview.html');
   if (fs.existsSync(previewPath)) {
     return res.sendFile(previewPath);
   }
-  res.redirect('/index.html');
+  res.redirect('/admin');
 });
 
-// Visual Website Editor Mode Route
+// Legacy /preview route redirects cleanly to /admin/staged
+app.get(/^\/preview/, (req, res) => {
+  const targetQuery = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  res.redirect(`/admin/staged${targetQuery}`);
+});
+
+// Visual Website Editor Mode Route - Redirects directly to native Next.js Editor route
 app.get(/^\/editor/, (req, res) => {
-  const editorPath = path.join(publicDir, 'editor.html');
-  if (fs.existsSync(editorPath)) {
-    return res.sendFile(editorPath);
+  const targetQuery = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  res.redirect(`http://localhost:3000/editor${targetQuery}`);
+});
+
+// CMS Dashboard Route
+app.get(/^\/admin/, (req, res) => {
+  const indexPath = path.join(publicDir, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
   }
-  res.redirect('/index.html');
+  res.send('Emaar CMS Server Running');
 });
 
 // Route custom page slugs (e.g. /test) directly to the website with visual editor on :3000

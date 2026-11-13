@@ -39,7 +39,10 @@ export default async function CustomPage({ params, searchParams }) {
   const pageSections = Array.isArray(page.sections) ? page.sections : [];
 
   return (
-    <div className="pt-[70px] min-h-screen w-full bg-white">
+    <div
+      className="min-h-screen w-full bg-white"
+      style={{ paddingTop: "calc(var(--hdr-h) + var(--hdr-top, 0px))" }}
+    >
       <main className="relative flex min-h-screen w-full flex-col items-center gap-0 pb-16">
         {/* If standard template with banner */}
         {!isBlank && heroBanner && (

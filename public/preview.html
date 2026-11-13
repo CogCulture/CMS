@@ -216,7 +216,7 @@
         <span>Publish to Live</span>
       </button>
 
-      <a href="/" class="btn-topbar btn-return">
+      <a href="/admin" class="btn-topbar btn-return" id="btnReturnToCms">
         <span>Back to CMS</span>
       </a>
     </div>
@@ -248,6 +248,10 @@
         return p.startsWith('/') ? p : '/' + p;
       }
       const path = window.location.pathname || '';
+      if (path.startsWith('/admin/staged/')) {
+        const sub = path.replace(/^\/admin\/staged/, '');
+        return sub.startsWith('/') ? sub : '/' + sub;
+      }
       if (path.startsWith('/preview/')) {
         const sub = path.replace(/^\/preview/, '');
         return sub.startsWith('/') ? sub : '/' + sub;

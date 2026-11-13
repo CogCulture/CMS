@@ -1,450 +1,408 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { PhoneIcon, WhatsappIcon } from "@/components/ui/icons";
+import { useEnquiry } from "@/components/EnquiryModal";
 
-// Defined outside to prevent recreating on every render
-const sidebarCategories = [
-  {
-    name: "Master Developments",
-    items: [
-      { name: "Gomti Greens", href: "/gomti-greens" },
-      { name: "Savana by Indore Greens", href: "/savana-indore" },
-      { name: "Savana by Jaipur Greens", href: "/savana-jaipur" },
-    ],
-  },
-  {
-    name: "Apartments",
-    items: [
-      { name: "Urban Oasis", href: "/urban-oasis" },
-      { name: "Urban Oasis - Phase - 4", href: "/urban-oasis-phase-4" },
-      { name: "Gurgaon Greens", href: "/gurgaon-greens" },
-      { name: "Imperial Gardens", href: "/imperial-gardens" },
-      { name: "The Views", href: "/the-views" },
-    ],
-  },
-  {
-    name: "Commercial Plots",
-    href: "/commercial-plots",
-    items: [], // No sub-links, behaves as a direct link
-  },
-  {
-    name: "Residential Plots",
-    items: [
-      { name: "Emaar Continental City - Phase II", href: "/emaar-continental-city-phase-2" },
-      { name: "Emaar Continental City - Phase I", href: "/emaar-continental-city-phase-1" },
-      { name: "Jaipur Greens Savana", href: "/jaipur-greens-savana" },
-      { name: "Gomti Greens – Plots", href: "/gomti-greens-plots" },
-    ],
-  },
-  {
-    name: "Offices",
-    items: [
-      { name: "Emaar India Business Centre", href: "/emaar-india-business-centre" },
-      { name: "Emaar Business District 83", href: "/emaar-business-district-83" },
-      { name: "Emaar Business District 114 NXT", href: "/emaar-business-district-114-nxt" },
-      { name: "Emaar Business District 75A", href: "/emaar-business-district-75a" },
-      { name: "Emaar Business District 89 NXT", href: "/emaar-business-district-89-nxt" },
-      { name: "Emaar Business District 114", href: "/emaar-business-district-114" },
-      { name: "Emaar Business District 65NXT", href: "/emaar-business-district-65nxt" },
-      { name: "Emaar Business District 65", href: "/emaar-business-district-65" },
-      { name: "The Palm Square", href: "/the-palm-square" },
-    ],
-  },
-  {
-    name: "Villas",
-    items: [
-      { name: "Casa Venero", href: "/casa-venero" },
-      { name: "The Villas", href: "/the-villas" },
-      { name: "Marbella Villas", href: "/marbella-villas" },
-      { name: "Emerald Floors", href: "/emerald-floors" },
-    ],
-  },
-];
+const LABEL = "font-nav text-[11.5px] font-semibold uppercase tracking-[0.13em] whitespace-nowrap";
 
-export default function Header() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState(null);
-  const [sidebarDropdown, setSidebarDropdown] = useState(null);
+const Chevron = ({ open }) => (
+  <svg
+    width="9"
+    height="6"
+    viewBox="0 0 10 6"
+    fill="none"
+    aria-hidden="true"
+    className={`flex-none transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+  >
+    <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
-  const toggleDropdown = (name) => {
-    setOpenDropdown(openDropdown === name ? null : name);
+export default function Header({ data }) {
+  const { logo, nav = [], contact } = data;
+  const pathname = usePathname();
+  const isHome = pathname === "/" || pathname === "/editor";
+  const { openEnquiry } = useEnquiry();
+
+  const [phase, setPhase] = useState("pre"); // pre -> intro -> done
+  const [bg, setBg] = useState(isHome ? "top" : "solid"); // top | glass | solid
+  const [mega, setMega] = useState(null);
+
+  const logoRef = useRef(null);
+  const headerRef = useRef(null);
+  const closeTimer = useRef(null);
+
+  // ---------- Logo intro: center -> top-left ----------
+  useLayoutEffect(() => {
+    const el = logoRef.current;
+    const skip =
+      !isHome ||
+      sessionStorage.getItem("introDone") ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (!el || skip) {
+      setPhase("done");
+      return;
+    }
+
+    const r = el.getBoundingClientRect();
+    const scale = Math.min(window.innerWidth * 0.6, 300) / r.width;
+    const dx = window.innerWidth / 2 - (r.left + r.width / 2);
+    const dy = window.innerHeight / 2 - (r.top + r.height / 2);
+
+    el.style.transition = "none";
+    el.style.transformOrigin = "center";
+    el.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+    document.body.style.overflow = "hidden";
+    setPhase("intro");
+
+    const t1 = setTimeout(() => {
+      el.style.transition = "transform 1.2s cubic-bezier(.77,0,.18,1)";
+      el.style.transform = "none";
+    }, 900);
+    const t2 = setTimeout(() => {
+      el.style.transition = "";
+      el.style.transformOrigin = "";
+      document.body.style.overflow = "";
+      sessionStorage.setItem("introDone", "1");
+      setPhase("done");
+    }, 2200);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      document.body.style.overflow = "";
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---------- Scroll: top -> glass -> solid ----------
+  useEffect(() => {
+    const update = () => {
+      const hero = document.getElementById("top");
+      if (!hero) return setBg("solid");
+      const y = window.scrollY;
+      const end = hero.offsetHeight - (headerRef.current?.offsetHeight ?? 0);
+      setBg(y >= end ? "solid" : y > 8 ? "glass" : "top");
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [pathname]);
+
+  useEffect(() => setMega(null), [pathname]);
+
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && setMega(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const cancelClose = () => clearTimeout(closeTimer.current);
+  const isEditorMode = () =>
+    typeof window !== "undefined" &&
+    (window.location.pathname === "/editor" ||
+      window.location.pathname.startsWith("/editor") ||
+      window.location.pathname.endsWith("/editor") ||
+      window.location.pathname.includes("/editor/") ||
+      new URLSearchParams(window.location.search).get("editor") === "true" ||
+      document.body.classList.contains("cms-editor-active"));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const keepOpen = () => cancelClose();
+    window.addEventListener("cms-keep-mega-open", keepOpen);
+    return () => window.removeEventListener("cms-keep-mega-open", keepOpen);
+  }, []);
+
+  const scheduleClose = (e) => {
+    cancelClose();
+    if (isEditorMode()) {
+      // 1. If user is currently editing or interacting with an element inside the header or mega panel, NEVER close
+      const activeEl = document.querySelector('[contenteditable="true"], .visual-editor-active-text, [data-cms-active="true"]');
+      if (
+        activeEl &&
+        (headerRef.current?.contains(activeEl) ||
+          document.querySelector('[data-testid="site-header-mega-panel"][data-open="true"]')?.contains(activeEl) ||
+          document.querySelector('.mega-panel[data-open="true"]')?.contains(activeEl))
+      ) {
+        return;
+      }
+
+      // 2. If the cursor is moving toward or into the visual editor toolbar, overlay, or studio bar
+      const rel = e?.relatedTarget;
+      if (
+        rel &&
+        (rel.closest?.("#dynamicTextPillBar") ||
+          rel.closest?.("#activeElementBoxOverlay") ||
+          rel.closest?.("#visualEditorStudioBar") ||
+          rel.closest?.(".visual-editor-portal") ||
+          rel.closest?.("#contextMenuPortal"))
+      ) {
+        return;
+      }
+    }
+
+    const delay = isEditorMode() ? 600 : 120;
+    closeTimer.current = setTimeout(() => {
+      if (isEditorMode()) {
+        const activeEl = document.querySelector('[contenteditable="true"], .visual-editor-active-text, [data-cms-active="true"]');
+        if (
+          activeEl &&
+          (headerRef.current?.contains(activeEl) ||
+            document.querySelector('[data-testid="site-header-mega-panel"][data-open="true"]')?.contains(activeEl) ||
+            document.querySelector('.mega-panel[data-open="true"]')?.contains(activeEl))
+        ) {
+          return;
+        }
+        if (document.querySelector('#dynamicTextPillBar:hover, #activeElementBoxOverlay:hover, #visualEditorStudioBar:hover')) {
+          return;
+        }
+      }
+      setMega(null);
+    }, delay);
+  };
+  const openMega = (label) => {
+    cancelClose();
+    setMega(label);
   };
 
-  const toggleSidebarDropdown = (name) => {
-    setSidebarDropdown(sidebarDropdown === name ? null : name);
-  };
+  useEffect(() => {
+    const handleScrollClose = () => {
+      if (mega) setMega(null);
+    };
+    window.addEventListener("scroll", handleScrollClose, { passive: true });
+    return () => window.removeEventListener("scroll", handleScrollClose);
+  }, [mega]);
+
+  const state = mega ? "solid" : bg;
+  const count = nav.length;
 
   return (
     <>
-      {/* HEADER */}
-      <header className="fixed top-0 z-30 flex h-[70px] w-full flex-col justify-center border-b border-gray-200/50">
-        <div className="container mx-auto flex flex-1 items-center justify-between px-4 2xl:px-12">
-
-          {/* LEFT: Menu & Logo */}
-          <div className="flex g33 md:w-1/4 items-center gap-4">
-            <button
-              type="button"
-              onClick={() => setMenuOpen(true)}
-              className="flex h-10 w-8 flex-col items-start h-auto gap-[5px]"
-              aria-label="Open menu"
+      <header
+        ref={headerRef}
+        data-testid="site-header"
+        data-state={state}
+        data-ready={phase === "done"}
+        onMouseEnter={cancelClose}
+        onMouseLeave={scheduleClose}
+        className="site-header fixed inset-x-0 top-[var(--hdr-top,0px)] z-50 h-[var(--hdr-h)]"
+      >
+        <div className="mx-auto flex h-full items-center justify-between gap-[clamp(14px,2vw,34px)] px-[clamp(20px,4vw,64px)]">
+          {/* LEFT: logo | rule | nav */}
+          <div className="flex h-full items-center gap-[14px]">
+            <Link
+              ref={logoRef}
+              href="/"
+              aria-label={typeof logo === "string" ? "Emaar India" : (logo?.alt || "Emaar India")}
+              data-testid="site-header-brand"
+              className={`block shrink-0 will-change-transform ${phase === "pre" ? "invisible" : ""}`}
             >
-              <span className="block h-[2px] w-6 bg-black"></span>
-              <span className="block h-[2px] w-6 bg-black"></span>
-              <span className="block h-[2px] w-6 bg-black"></span>
-            </button>
-
-            {/* EMAAR Logo Placeholder */}
-            <a href="/" className="flex items-center justify-center">
               <Image
-                src="/images/emaar-india-logo-en.svg"
-                alt="Emaar India"
+                src={typeof logo === "string" ? logo : (logo?.src || "/images/emaar-india-logo-en.svg")}
+                alt={typeof logo === "string" ? "Emaar India" : (logo?.alt || "Emaar India")}
                 width={120}
                 height={40}
-                className="object-contain h-[35px] w-auto"
                 priority
+                className="hdr-logo h-[34px] w-auto object-contain lg:h-[38px]"
+                style={{ width: "auto" }}
               />
-            </a>
+            </Link>
+
+            <span
+              aria-hidden="true"
+              style={{ "--i": 0 }}
+              className="hdr-reveal mr-[14px] hidden h-5 w-px bg-current opacity-40 lg:block"
+            />
+
+            <nav
+              aria-label="Primary"
+              data-testid="site-header-nav"
+              data-mega={mega ? "1" : "0"}
+              className="hdr-nav hidden h-full items-center gap-[clamp(18px,1.9vw,30px)] lg:flex"
+            >
+              {nav.map((item, i) => {
+                const base = `hdr-reveal hdr-link flex items-center gap-2 px-px pb-[7px] pt-1.5 ${LABEL}`;
+
+                if (item.mega) {
+                  const open = mega === item.label;
+                  const props = {
+                    "aria-expanded": open,
+                    "aria-haspopup": "true",
+                    "data-active": open,
+                    "data-testid": "site-header-mega-trigger",
+                    onMouseEnter: () => openMega(item.label),
+                    onFocus: () => openMega(item.label),
+                    style: { "--i": i + 1 },
+                    className: base,
+                  };
+                  return item.href ? (
+                    <Link key={item.label} href={item.href} {...props}>
+                      {item.label}
+                      <Chevron open={open} />
+                    </Link>
+                  ) : (
+                    <button key={item.label} type="button" onClick={() => setMega(open ? null : item.label)} {...props}>
+                      {item.label}
+                      <Chevron open={open} />
+                    </button>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    data-testid="site-header-nav-link"
+                    onMouseEnter={() => setMega(null)}
+                    style={{ "--i": i + 1 }}
+                    className={base}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
           </div>
 
-          {/* CENTER NAVIGATION */}
-          <nav className="hidden flex-1 items-center justify-center gap-8 lg:flex xl:gap-12">
-            {/* ABOUT US */}
+          {/* RIGHT: mobile = sirf call, desktop = sab */}
+          <div className="flex items-center gap-[clamp(10px,1.3vw,20px)]" data-testid="site-header-actions">
             <a
-              href="/about"
-              className="border-b border-transparent py-3 text-center text-[11px] uppercase tracking-widest whitespace-nowrap text-black transition-all hover:border-black xl:text-[12px]"
-            >
-              ABOUT US
-            </a>
-
-            {/* LATEST LAUNCHES */}
-            <a
-              href="/latest-launches"
-              className="border-b border-transparent py-3 text-center text-[11px] uppercase tracking-widest whitespace-nowrap text-black transition-all hover:border-black xl:text-[12px]"
-            >
-              LATEST LAUNCHES
-            </a>
-
-            {/* PROJECTS DROPDOWN */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => toggleDropdown("projects")}
-                className="flex items-center gap-2 border-b border-transparent py-3 text-center text-[11px] uppercase tracking-widest whitespace-nowrap text-black transition-all hover:border-black xl:text-[12px]"
-              >
-                PROJECTS
-
-                <svg
-                  className={`mt-[1px] h-3 w-3 transition-transform duration-300 ${
-                    openDropdown === "projects" ? "rotate-180" : ""
-                  }`}
-                  viewBox="0 0 12 12"
-                  fill="none"
-                >
-                  <path
-                    d="M2.5 4.5L6 8L9.5 4.5"
-                    stroke="currentColor"
-                    strokeWidth="1.2"
-                  />
-                </svg>
-              </button>
-
-              {openDropdown === "projects" && (
-                <div className="absolute left-1/2 top-full mt-1 w-48 -translate-x-1/4 border border-gray-100 bg-white shadow-lg">
-                  <a
-                    href="/projects/residential"
-                    className="block px-5 py-3 tracking-widest whitespace-nowrap text-[11px] xl:text-[12px] uppercase text-black hover:bg-gray-50"
-                  >
-                    Residential
-                  </a>
-                  <a
-                    href="/projects/commercial"
-                    className="block px-5 py-3 tracking-widest whitespace-nowrap text-[11px] xl:text-[12px] uppercase text-black hover:bg-gray-50"
-                  >
-                    Commercial
-                  </a>
-                  <a
-                    href="/projects"
-                    className="block px-5 py-3 tracking-widest whitespace-nowrap text-[11px] xl:text-[12px] uppercase text-black hover:bg-gray-50"
-                  >
-                    All Projects
-                  </a>
-                </div>
-              )}
-            </div>
-
-            {/* SUSTAINABILITY */}
-            <a
-              href="/sustainability"
-              className="border-b border-transparent py-3 text-center text-[11px] uppercase tracking-widest whitespace-nowrap text-black transition-all hover:border-black xl:text-[12px]"
-            >
-              SUSTAINABILITY
-            </a>
-          </nav>
-
-          {/* RIGHT */}
-          <div className="flex items-center justify-end gap-6 md:w-1/4">
-            {/* CALL ICON */}
-            <a
-              href="tel:+911234567890"
+              href={contact.phone}
               aria-label="Call us"
-              className="flex items-center justify-center transition-opacity hover:opacity-80"
+              data-testid="site-header-call"
+              style={{ "--i": count + 1 }}
+              className="hdr-reveal hdr-icon inline-flex min-h-[44px] min-w-[44px] items-center justify-center"
             >
-              <Image
-                src="/images/call.svg"
-                alt="Call Us"
-                width={14}
-                height={14}
-                className="h-[14px] w-[14px] object-contain"
-              />
+              <PhoneIcon />
             </a>
 
-            {/* WHATSAPP ICON */}
             <a
-              href="https://wa.me/911234567890"
+              href={contact.whatsapp}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               aria-label="WhatsApp"
-              className="flex items-center justify-center transition-opacity hover:opacity-80"
+              data-testid="site-header-whatsapp"
+              style={{ "--i": count + 2 }}
+              className="hdr-reveal hdr-icon hidden min-h-[44px] min-w-[44px] items-center justify-center lg:inline-flex"
             >
-              <Image
-                src="/images/whatsapp.svg"
-                alt="WhatsApp"
-                width={16}
-                height={16}
-                className="h-[16px] w-[16px] object-contain"
-              />
+              <WhatsappIcon />
             </a>
 
-            {/* GET IN TOUCH */}
-            <a
-              href="/contact"
-              className="hidden cursor-pointer rounded-xs border-2 border-primary bg-primary px-4.5 py-3.5 text-xs font-bold tracking-widest uppercase text-white transition-all hover:bg-white hover:text-primary lg:inline-block"
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              data-testid="site-header-cta"
+              onClick={() => openEnquiry("header")}
+              style={{ "--i": count + 3 }}
+              className={`hdr-reveal hdr-cta hidden min-h-[48px] items-center justify-center px-[17px] py-[9px] lg:inline-flex ${LABEL} tracking-[0.14em]`}
             >
-              GET IN TOUCH
-            </a>
+              {contact.ctaLabel}
+            </button>
           </div>
         </div>
       </header>
 
-      {/* DARK OVERLAY */}
+      {/* SCRIM */}
       <div
-        onClick={() => setMenuOpen(false)}
-        className={`fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${
-          menuOpen
-            ? "pointer-events-auto opacity-100"
-            : "pointer-events-none opacity-0"
+        aria-hidden="true"
+        onClick={() => setMega(null)}
+        className={`fixed inset-x-0 bottom-0 top-[calc(var(--hdr-h)+var(--hdr-top,0px))] z-40 bg-black/40 transition-opacity duration-300 ${
+          mega ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
 
-      {/* LEFT SLIDE MENU */}
-      <aside
-        className={`fixed left-0 top-0 z-[70] flex h-screen w-[85vw] max-w-[420px] flex-col bg-white shadow-2xl transition-transform duration-500 ease-in-out ${
-          menuOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        {/* SIDEBAR HEADER */}
-        <div className="flex items-center justify-between px-8">
-          <div className="flex w-full items-center justify-between border-b border-gray-200 py-4 mb-4">
-            {/* LOGO */}
-            <a href="/" className="flex items-center justify-center">
-              <Image
-                src="/images/emaar-india-logo-en.svg"
-                alt="Emaar India"
-                width={96}
-                height={32}
-                className="w-auto object-contain"
-              />
-            </a>
-
-            {/* CLOSE */}
-            <button
-              type="button"
-              onClick={() => setMenuOpen(false)}
-              className="flex h-10 w-10 items-end justify-center text-gray-500 transition-colors hover:text-black"
-              aria-label="Close menu"
+      {/* DESKTOP MEGA PANELS */}
+      {nav
+        .filter((n) => n.mega)
+        .map((item) => {
+          const m = item.mega;
+          return (
+            <div
+              key={item.label}
+              role="region"
+              aria-label={item.label}
+              data-testid="site-header-mega-panel"
+              data-open={mega === item.label}
+              onMouseEnter={cancelClose}
+              onMouseLeave={scheduleClose}
+              className="mega-panel hidden lg:block"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="lucide lucide-x size-5 cursor-pointer text-black"
-                aria-hidden="true"
-              >
-                <path d="M18 6 6 18" />
-                <path d="m6 6 12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
+              <div className="mx-auto max-w-[1500px] px-[clamp(20px,4vw,64px)] pb-[clamp(40px,4.2vw,58px)] pt-[clamp(34px,3.6vw,50px)]">
+                <div className="mb-[clamp(24px,2.6vw,34px)] flex items-baseline gap-5">
+                  <p className="m-0 whitespace-nowrap font-nav text-[10px] font-semibold uppercase tracking-[0.3em] text-white/60">
+                    {m.eyebrow}
+                  </p>
+                  <span className="h-px flex-1 bg-white/15" aria-hidden="true" />
+                  {m.meta && <p className="m-0 whitespace-nowrap text-[12.5px] text-white/55">{m.meta}</p>}
+                </div>
 
-        {/* SIDEBAR MENU */}
-        <nav className="flex flex-col gap-2 overflow-y-auto px-8">
-          {/* MOBILE/TABLET ONLY TOP NAV LINKS */}
-          <div className="mt-lg-4 flex flex-col items-start gap-2 border-b border-gray-200 pb-4 lg:hidden">
-            <a
-              href="/about"
-              className="py-2 text-sm uppercase tracking-widest text-black transition-all duration-500"
-            >
-              About Us
-            </a>
-            <a
-              href="/latest-launches"
-              className="py-2 text-sm uppercase tracking-widest text-black transition-all duration-500"
-            >
-              Latest Launches
-            </a>
+                <div className="flex flex-nowrap gap-[clamp(30px,4vw,84px)]">
+                  {m.columns.map((col, ci) => (
+                    <div key={col.title} className="mega-item min-w-[11.25rem] shrink" style={{ "--i": ci }}>
+                      <p className="mb-5 mt-0 font-nav text-[9.5px] font-semibold uppercase tracking-[0.26em] text-white/60">
+                        {col.title}
+                      </p>
+                      <div className="flex flex-col items-start gap-[15px]">
+                        {col.links.map((l) => (
+                          <Link
+                            key={l.href + l.label}
+                            href={l.href}
+                            className="mega-link flex flex-col items-start gap-1 text-[15.5px] leading-[1.2] text-white"
+                          >
+                            <span>{l.label}</span>
+                            {l.sub && <span className="whitespace-nowrap text-[11px] text-white/50">{l.sub}</span>}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
 
-            {/* PROJECTS DROPDOWN (mobile) */}
-            <div className="flex w-full flex-col">
-              <button
-                type="button"
-                onClick={() => toggleSidebarDropdown("PROJECTS")}
-                className="flex w-full items-center justify-between py-2 text-left text-sm uppercase tracking-widest text-black transition-all duration-500"
-              >
-                Projects
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className={`h-4 w-4 transition-transform duration-300 ${
-                    sidebarDropdown === "PROJECTS" ? "rotate-90" : ""
-                  }`}
-                  aria-hidden="true"
-                >
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
-              </button>
-
-              <div
-                className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                  sidebarDropdown === "PROJECTS"
-                    ? "max-h-40 pt-1 pb-2 opacity-100"
-                    : "max-h-0 opacity-0"
-                }`}
-              >
-                <div className="flex flex-col gap-2 pl-2">
-                  <a
-                    href="/projects/residential"
-                    className="text-sm uppercase tracking-widest text-gray-600 transition-all duration-500 hover:text-black"
-                  >
-                    Residential
-                  </a>
-                  <a
-                    href="/projects/commercial"
-                    className="text-sm uppercase tracking-widest text-gray-600 transition-all duration-500 hover:text-black"
-                  >
-                    Commercial
-                  </a>
-                  <a
-                    href="/projects"
-                    className="text-sm uppercase tracking-widest text-gray-600 transition-all duration-500 hover:text-black"
-                  >
-                    All Projects
-                  </a>
+                  {m.feature && (
+                    <div
+                      className="mega-item ms-auto w-[min(22.5rem,100%)] min-w-[12.5rem] shrink"
+                      style={{ "--i": m.columns.length }}
+                    >
+                      <div className="relative aspect-[16/10] overflow-hidden bg-[#26241f]">
+                        <Image
+                          src={m.feature.image}
+                          alt={m.feature.alt || m.feature.title}
+                          fill
+                          sizes="360px"
+                          className="object-cover"
+                        />
+                      </div>
+                      <div className="mt-4 flex items-baseline justify-between gap-3.5">
+                        <div>
+                          <p className="m-0 font-nav text-[9.5px] font-semibold uppercase tracking-[0.22em] text-white/60">
+                            {m.feature.eyebrow}
+                          </p>
+                          <p className="mb-0 mt-[5px] font-serif text-[20px] leading-[1.1] text-white">{m.feature.title}</p>
+                          <p className="mb-0 mt-[3px] text-[12.5px] text-white/60">{m.feature.subtitle}</p>
+                        </div>
+                        <Link
+                          href={m.feature.href}
+                          className="mega-cta flex-none whitespace-nowrap border-b border-white/50 pb-[3px] font-nav text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white"
+                        >
+                          {m.feature.cta}
+                        </Link>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-
-            <a
-              href="/sustainability"
-              className="py-2 text-sm uppercase tracking-widest text-black transition-all duration-500"
-            >
-              Sustainability
-            </a>
-          </div>
-
-          {/* DYNAMIC CATEGORIES FOR MASTER DEVELOPMENTS & OTHER CATEGORIES */}
-          {sidebarCategories.map((category, index) => (
-            <div key={index} className="flex flex-col">
-              
-              {category.items.length > 0 ? (
-                <>
-                  {/* MENU TITLE WITH DROPDOWN */}
-                  <button
-                    type="button"
-                    onClick={() => toggleSidebarDropdown(category.name)}
-                    className="flex w-full items-center justify-between py-2 text-left text-sm uppercase tracking-widest text-black transition-all duration-500"
-                  >
-                    {category.name}
-
-                    {/* RIGHT / DOWN ARROW */}
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className={`h-4 w-4 transition-transform duration-300 ${
-                        sidebarDropdown === category.name ? "rotate-90" : ""
-                      }`}
-                      aria-hidden="true"
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
-                  </button>
-
-                  {/* DROPDOWN CONTENT */}
-                  <div
-                    className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                      sidebarDropdown === category.name
-                        ? "max-h-[800px] pt-1 pb-2 opacity-100"
-                        : "max-h-0 opacity-0"
-                    }`}
-                  >
-                    <div className="flex flex-col gap-2 pl-2">
-                      {category.items.map((item, idx) => (
-                        <a
-                          key={idx}
-                          href={item.href}
-                          className="text-sm uppercase tracking-widest text-gray-600 transition-all duration-500 hover:text-black"
-                        >
-                          {item.name}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                /* MENU TITLE AS DIRECT LINK (For empty categories like Commercial Plots) */
-                <a
-                  href={category.href}
-                  className="flex w-full items-center justify-between py-2 text-left text-sm uppercase tracking-widest text-black transition-all duration-500"
-                >
-                  {category.name}
-                </a>
-              )}
-            </div>
-          ))}
-
-        </nav>
-
-        {/* SIDEBAR FOOTER */}
-        <div className="p-8 pb-12 mt-auto">
-          <a
-            href="/contact"
-            className="block w-full cursor-pointer rounded-xs border-2 border-primary bg-primary px-4.5 py-3.5 text-center text-xs font-bold tracking-widest uppercase text-white transition-all hover:bg-white hover:text-primary"
-          >
-            GET IN TOUCH
-          </a>
-        </div>
-      </aside>
+          );
+        })}
     </>
   );
 }
